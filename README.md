@@ -38,10 +38,15 @@ lives in one file, `triage.yaml`.
 ## Quickstart
 
 This template targets **Hermes `>=0.20.0`**. Validate and inspect it before
-touching any Hermes install:
+touching any Hermes install. Use an isolated Python environment; do not install
+packages into macOS's system Python. On a modern Mac, install
+[uv](https://docs.astral.sh/uv/) with `brew install uv` if it is not already on
+your `PATH`, then run:
 
 ```bash
-pip install -r requirements.txt          # just PyYAML
+uv venv --python 3.11
+source .venv/bin/activate
+uv pip install -r requirements.txt       # just PyYAML
 python -m cli.triage validate            # check the example config
 python -m unittest discover -s tests     # full suite (live Hermes checks are opt-in)
 python -m cli.triage scaffold            # dry-run Hermes setup plan

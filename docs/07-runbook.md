@@ -26,7 +26,11 @@ You execute the scaffolded commands and the manual install yourself.
 ## 1. Prerequisites
 
 - Hermes `>=0.20.0` installed (`hermes --version`).
-- `pip install -r requirements.txt` in this repo (PyYAML).
+- An isolated project environment with PyYAML installed. On macOS, the
+  recommended setup is `brew install uv` (if needed), then from this repo:
+  `uv venv --python 3.11`, `source .venv/bin/activate`, and
+  `uv pip install -r requirements.txt`. Do not install into Apple's system
+  Python.
 - `python -m cli.triage validate` is clean.
 - (Recommended) `python -m cli.triage preflight --format json` exits 0 with no
   capability blockers in your Hermes home. Resource blockers are expected
