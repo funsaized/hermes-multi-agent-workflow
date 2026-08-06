@@ -1,6 +1,6 @@
 ---
 name: pain-point-scout-x
-description: Use on the `xresearch` profile's hourly cron to scan X (Twitter) via Grok for pain points that AI-agent users complain about, write a sourced intake report to the orchestrator's shared vault, and create one `intake` Kanban task so the orchestrator picks it up. Single-device pain-point pipeline.
+description: Historical X-scout snapshot from the original pain-point design; do not install as current generated configuration.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -11,20 +11,19 @@ metadata:
 ---
 
 <!--
-REFERENCE — REAL SCOUT FROM THE LIVE PIPELINE.
+HISTORICAL REFERENCE — DO NOT INSTALL AS CURRENT CONFIGURATION.
 
-This is the actual `pain-point-scout-x` skill from the system this template was
-extracted from, included verbatim (lightly sanitized: one absolute machine path
-genericized) so you can see a concrete, filled-in scout next to the generic
-template at `skills/templates/triage-scout/SKILL.md`.
+This is a sanitized snapshot from the system that inspired the template. Its
+names and paths are intentionally historical. Current skills are rendered from
+`skills/templates/triage-scout/SKILL.md` and `triage.yaml`.
 
 How it maps to the template / triage.yaml:
-  - It is one copy of the scout template, named per a `sources[]` entry.
+  - It is an old manually maintained copy of the scout template.
   - "Search X for agent-user pain" below IS that source's `query`.
   - The report's `## Candidate:` block is the parser contract
     (engine/intake_parser.py) — fields map to `item_schema` in triage.yaml.
-  - `board: pain-point` is the `board:` value; `assignee: orchestrator` is the
-    role→profile mapping under `roles:`.
+  - `board: pain-point` was the historical `board:` value;
+    `assignee: orchestrator` was the old role→profile mapping.
 Adapt the same way for your own domain. See docs/04-adapting-to-your-domain.md.
 -->
 

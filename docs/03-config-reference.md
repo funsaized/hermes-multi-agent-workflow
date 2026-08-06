@@ -9,8 +9,8 @@ Every key in `triage.yaml`. The typed view is `engine/config.py`; the validator 
 |---|---|---|
 | `name` | str | Pipeline slug, for logs. |
 | `board` | str | Kanban board slug. `default` → `~/.hermes/kanban.db`; else `~/.hermes/kanban/boards/<board>/kanban.db`. |
-| `workspace_root` | path | Base for the item vault and per-item persistent workspaces. |
-| `cost_gate_usd` | number | Soft per-item LLM budget. Over before gate → pause+notify; over after approval → notify+continue. |
+| `workspace_root` | path | Base for the item vault and per-item persistent workspaces. Relative values are resolved by runtime code from the process working directory; run from `hermes.project_root` or use an absolute path. |
+| `cost_gate_usd` | number | Threshold read by `scripts/cost_report.py`. The current pipeline does not invoke that script or enforce pause/notify behavior automatically. |
 
 ## `hermes:` — deployment metadata
 
@@ -30,9 +30,9 @@ Each `hermes.profiles.<name>` supports:
 
 | Key | Meaning |
 |---|---|
-| `description` | Required, non-empty purpose used by `hermes profile create --description`. |
+| `description` | Required, non-empty purpose. Used by `profile create --description` and preflight for cloned profiles; the existing base profile's description is not enforced. |
 | `toolsets` | Toolsets the scaffold enables on the profile's CLI platform and, when `owns_cron: true`, its cron platform. Preflight separately verifies that each name is advertised by the installed runtime and that it is enabled on every required surface. |
-| `owns_cron` | Whether this profile owns scheduled source jobs and therefore needs a profile-local gateway. It is invalid unless a source uses the profile. |
+| `owns_cron` | Whether this profile owns scheduled source jobs and therefore needs a profile-local gateway process to tick cron. That scheduler gateway has Kanban dispatch disabled and does not need Discord credentials. It is invalid unless a source uses the profile. |
 
 For temporary backward compatibility, omitting `hermes:` derives profile names
 from `roles:` and `sources:`. Validation exposes a warning because descriptions
@@ -47,7 +47,7 @@ List of detectors. Each runs a scout skill on a profile, on a cron.
 |---|---|
 | `id` | Short id (used in report filenames + the intake task title). |
 | `profile` | Hermes profile the scout runs under (binds the model). |
-| `skill` | Scout skill name installed on that profile (copy of the scout template). |
+| `skill` | Name of the source-specific skill rendered from the shared scout template and manually installed on that profile. |
 | `schedule` | Cron expression. Registered in the source profile's local cron store (see runbook). |
 | `query` | The domain prompt — what to look for. Pasted into the scout skill. |
 
@@ -58,15 +58,16 @@ overwrite one another.
 
 ## `item_schema.fields:`
 
-The structured fields a scout emits per candidate. `title`, `claim`, `sources` are
-required by the engine; the rest feed your rubric/router. Keep this in sync with
-the scout report format and `engine/intake_parser.py`.
+Declarative documentation for the fields a scout emits per candidate. The current
+parser is fixed to `title`, `claim`, `sources`, and `why_it_may_matter`; it does
+not dynamically consume this list, and `validate` does not enforce the required
+parser fields. Keep all three surfaces in sync manually.
 
 ## `dedup:`
 
 | Key | Meaning |
 |---|---|
-| `method` | `token-cosine` (default, no deps) or `embedding` (wire it up yourself). |
+| `method` | Reserved backend selector. `token-cosine` is the only implementation currently used; setting another value does not switch `TriageEngine.dedup()`. |
 | `duplicate_threshold` | ≥ → treat as a duplicate of an existing item. |
 | `possible_threshold` | ≥ → flag as a possible duplicate, continue. |
 
@@ -104,12 +105,12 @@ A map of path name → definition. A path is one outcome of routing.
 
 | Key | Meaning |
 |---|---|
-| `prep[]` | Stages BEFORE the gate. Each `{stage, role}`. Chained sequentially. |
+| `prep[]` | Ordered stages BEFORE the gate. Each `{stage, role}`. `prep_specs()` does not link them; the caller must create sequential parent edges. |
 | `propose.role` | Who drafts + sends the proposal (usually `orchestrator`). |
 | `propose.template` | Markdown proposal template under `paths/proposals/`. |
 | `fulfill[]` | Stages AFTER approval. Each `{stage, role}`. Run in a shared persistent workspace. |
 | `workspace_subdir` | Bucket under `workspace_root` for this path's per-item dirs (e.g. `builds`). Defaults to the path name. |
-| `scope_rails` | Markdown file (under `paths/rails/`) inlined into each worker's task body — hard limits. |
+| `scope_rails` | Markdown prompt-policy file inlined into each worker task. It guides the model but is not a sandbox or technical enforcement boundary. |
 | `deliverable_spec` | Markdown file (under `paths/specs/`) inlined into workers — output format. |
 | `auto` | `true` → terminal path, no work (e.g. `shelve`). |
 
@@ -127,7 +128,7 @@ rename/merge profiles without touching paths.
 | Key | Meaning |
 |---|---|
 | `channel` | Messaging platform used for proposals (for example, `discord`). |
-| `target` | Exact `hermes send --to` target (for example, `discord:1484142557704491119`). Must use the `channel` prefix. |
+| `target` | Optional exact `hermes send --to` target (for example, `discord:1484142557704491119`). Must use the `channel` prefix; when omitted, rendering falls back to the channel string. |
 | `approve` / `shelve` / `modify` | Ordinary-text reply verbs the orchestrator maps to `proposal_actions.py` subcommands. Do not use `/approve`; Hermes reserves it for execution approval. |
 
 ## Deployment flow (Hermes 0.20)
@@ -137,8 +138,9 @@ live Hermes install without baking any mutating code into this repository. Run
 them in this order:
 
 1. `python -m cli.triage validate` — checks `triage.yaml` consistency. Fails on
-   broken routes, undefined roles, unreachable thresholds, invalid
-   `hermes:` topology, or missing template files. Exposes
+   broken routes, undefined roles, unreachable thresholds, or invalid
+   `hermes:` topology. Missing path template files are printed as non-fatal CLI
+   warnings and are resolved relative to the process working directory. Exposes
    `TriageConfig.validation_warnings` for non-fatal compatibility notices (e.g.
    when `hermes:` is missing entirely).
 2. `python -m cli.triage preflight --format text|json` — read-only. Verifies
@@ -150,14 +152,18 @@ them in this order:
    gateway, cron scheduler/job, and gate channel is present. Exits 1 on
    blockers and prints evidence. Never reads credentials.
 3. `python -m cli.triage scaffold --format shell|json` — dry-run deployment
-   plan. Pure planner (no subprocess, no Hermes mutations). Emits an ordered
+   plan. The underlying planner is pure and the command never mutates Hermes;
+   unless `--no-preflight` is supplied, the CLI first runs read-only Hermes
+   subprocess checks. It emits an ordered
    sequence of `hermes profile create <profile> --clone-from …` for every profile
    except the already-existing `base_profile`,
    `hermes -p <profile> config set terminal.cwd <abs>`,
    `hermes -p <profile> tools enable … --platform cli` plus `--platform cron`
    for cron-owning profiles, profile-local
    `cron create --workdir <abs> --deliver local`, and
-   `gateway install --start-now --start-on-login` for every new gateway profile.
+   `gateway install --start-now --start-on-login` for the configured gateway and
+   every cron-owning profile. A scout's gateway is a local cron scheduler, not an
+   additional Discord listener or Kanban dispatcher.
    When `gateway_profile == base_profile`, the existing root gateway is reused
    and no competing gateway installation is emitted. Skill installation and model/auth are
    emitted as `CHECKPOINT:` comments (or `argv: null` in JSON), never as
@@ -177,9 +183,11 @@ them in this order:
    the scaffold plan is intentionally deferred. Do not invoke it on a live
    Hermes home until a separately approved installer ships.
 
-This split keeps every Hermes mutation out of the engine. The engine produces
-typed metadata, validates it, plans against the live runtime, and renders
-reviewable artifacts. A human copies, packages, and approves.
+This split keeps deployment mutations out of these CLI surfaces. Configuration,
+planning, preflight, and rendering produce reviewable artifacts; a human applies
+the emitted Hermes commands and copies or packages skills. Runtime
+`proposal_actions.py` does mutate the selected Kanban database after a gate
+decision.
 
 ## Validation guarantees
 
@@ -187,4 +195,6 @@ reviewable artifacts. A human copies, packages, and approves.
 path; a role is used but undefined; the threshold exceeds the max possible total;
 the classifier lane isn't in `lanes`; or Hermes deployment metadata/topology is
 inconsistent. `validation_warnings` exposes non-fatal compatibility warnings.
-The CLI also warns if a referenced template file is missing.
+The CLI also warns if a referenced template file is missing. It does not validate
+cron syntax, dedup backend support/threshold ordering, or `item_schema` against
+the fixed intake parser.

@@ -15,20 +15,20 @@
 # ===========================================================================
 
 # A short slug for this pipeline. Used in logs and (optionally) the board name.
-name: ai-agent-pain-points
+name: ai-agent-pain-points-for-non-technical-users
 
 # The dedicated Hermes Kanban board this pipeline runs on. Keep it isolated from
 # `default` so triage cards don't mix with your other work.
 # Resolves to ~/.hermes/kanban/boards/<board>/kanban.db (or ~/.hermes/kanban.db
 # when board: default).
-board: pain-point
+board: pain-points-for-noobs
 
 # Where per-item persistent workspaces and the item vault live (relative to repo
 # root, or absolute). Post-gate stages share <workspace_root>/<subdir>/<slug>/.
 workspace_root: ./work
 
-# Soft per-item LLM-spend budget (USD). Over budget BEFORE the gate → pause +
-# notify; over budget AFTER approval → notify + continue. See scripts/cost_report.py.
+# Soft per-item LLM-spend threshold (USD) read by scripts/cost_report.py. The
+# current pipeline does not invoke or enforce it automatically.
 cost_gate_usd: 5
 
 # --------------------------------------------------------------------------- #
@@ -37,88 +37,89 @@ cost_gate_usd: 5
 # explicit human checkpoints. `project_root` resolves from this file's location.
 # --------------------------------------------------------------------------- #
 hermes:
-  min_version: "0.20.0"
-  base_profile: default
-  # Reuse the already-running root gateway. This avoids two gateways competing
-  # for the same Discord bot token; scout profiles still run their own cron-only
-  # gateways with Kanban dispatch disabled.
-  gateway_profile: default
-  project_root: .
-  profile_strategy: clone
-  profiles:
-    default:
-      description: "Existing root profile; owns triage state, routing, and the Discord human gate."
-      toolsets: [file, terminal, kanban]
-    researcher:
-      description: "Performs source-backed research lanes and structured handoffs."
-      toolsets: [web, file]
-    analyst:
-      description: "Synthesizes research and develops bounded proposals."
-      toolsets: [web, file]
-    builder:
-      description: "Builds only approved artifacts within path scope rails."
-      toolsets: [file, terminal, coding]
-    tester:
-      description: "Independently tests approved artifacts and reports evidence."
-      toolsets: [file, terminal]
-    video_producer:
-      description: "Produces source-backed slides and scripts."
-      toolsets: [web, file]
-    xresearch:
-      description: "Scheduled source scout for X."
-      toolsets: [x_search, file, kanban]
-      owns_cron: true
-    webresearch:
-      description: "Scheduled scout for web, Reddit, and YouTube."
-      toolsets: [web, file, kanban]
-      owns_cron: true
+    min_version: "0.20.0"
+    base_profile: default
+    # Reuse the already-running root gateway. This avoids two gateways competing
+    # for the same Discord bot token; scout profiles still run their own cron-only
+    # gateways with Kanban dispatch disabled.
+    gateway_profile: default
+    project_root: .
+    profile_strategy: clone
+    profiles:
+        default:
+            description: "Existing root profile; owns triage state, routing, and the Discord human gate."
+            toolsets: [file, terminal, kanban]
+        researcher:
+            description: "Performs source-backed research lanes and structured handoffs."
+            toolsets: [web, file]
+        analyst:
+            description: "Synthesizes research and develops bounded proposals."
+            toolsets: [web, file]
+        builder:
+            description: "Builds only approved artifacts within path scope rails."
+            toolsets: [file, terminal, coding]
+        tester:
+            description: "Independently tests approved artifacts and reports evidence."
+            toolsets: [file, terminal]
+        video_producer:
+            description: "Produces source-backed slides and scripts."
+            toolsets: [web, file]
+        xresearch:
+            description: "Scheduled source scout for X."
+            toolsets: [x_search, file, kanban]
+            owns_cron: true
+        webresearch:
+            description: "Scheduled scout for web, Reddit, and YouTube."
+            toolsets: [web, file, kanban]
+            owns_cron: true
 
 # --------------------------------------------------------------------------- #
-# SOURCES — the scouts. Each is a Hermes profile running a scout skill on a cron.
+# SOURCES — desired scout deployments. Each entry renders one profile-specific
+# skill and one profile-local cron command; installation remains manual.
 # The profile binds the model (e.g. one scout on Grok, the rest on GPT). The
 # `query` is the domain prompt that tells the scout what to look for.
-# Crons are registered in the GATEWAY profile's store (see docs/07-runbook.md).
+# Crons are registered in each source profile's local store (see docs/07-runbook.md).
 # --------------------------------------------------------------------------- #
 sources:
-  - id: x
-    profile: xresearch
-    skill: triage-scout-x
-    schedule: "15 * * * *"        # hourly at :15
-    query: |
-      Search X for people describing concrete, recent pain using AI coding
-      agents — wasted hours, gave up, broken workflows. Quote them. Skip vague
-      hype. Each find: a one-line claim, source URLs, why it may matter.
-  - id: web
-    profile: webresearch
-    skill: triage-scout-web
-    schedule: "45 * * * *"        # hourly at :45 (staggered from X)
-    query: |
-      Search Reddit, YouTube, and the web for AI-agent users describing concrete
-      friction or confusion. Prefer threads with multiple corroborating voices.
+    - id: x
+      profile: xresearch
+      skill: triage-scout-x
+      schedule: "15 * * * *" # hourly at :15
+      query: |
+          Search X for people describing concrete, recent pain using AI coding
+          agents — wasted hours, gave up, broken workflows. Quote them. Skip vague
+          hype. Each find: a one-line claim, source URLs, why it may matter.
+    - id: web
+      profile: webresearch
+      skill: triage-scout-web
+      schedule: "45 * * * *" # hourly at :45 (staggered from X)
+      query: |
+          Search Reddit, YouTube, and the web for AI-agent users describing concrete
+          friction or confusion. Prefer threads with multiple corroborating voices.
 
 # --------------------------------------------------------------------------- #
-# ITEM SCHEMA — the structured fields a scout emits per candidate. These feed
-# dedup, scoring, and routing. `title`, `claim`, `sources` are required by the
-# engine; the rest are domain fields your rubric/router consume.
+# ITEM SCHEMA — declarative documentation for fields a scout emits per candidate.
+# The parser contract is fixed in engine/intake_parser.py; this list does not
+# dynamically configure it.
 # --------------------------------------------------------------------------- #
 item_schema:
-  fields:
-    - title
-    - claim
-    - sources
-    - why_it_may_matter
-    - agent_solvable_or_explainable
-    - solution_gap
-    - strategic_fit
+    fields:
+        - title
+        - claim
+        - sources
+        - why_it_may_matter
+        - agent_solvable_or_explainable
+        - solution_gap
+        - strategic_fit
 
 # --------------------------------------------------------------------------- #
-# DEDUP — don't research the same thing twice. token-cosine is the dependency-
-# free default; switch to "embedding" once you populate item embeddings.
+# DEDUP — don't research the same thing twice. token-cosine is the only backend
+# currently wired; `method` is reserved for a future embedding implementation.
 # --------------------------------------------------------------------------- #
 dedup:
-  method: token-cosine
-  duplicate_threshold: 0.62       # >= this → duplicate (append source, stop)
-  possible_threshold: 0.40        # >= this → possible dup (flag, continue)
+    method: token-cosine
+    duplicate_threshold: 0.62 # >= this → duplicate (append source, stop)
+    possible_threshold: 0.40 # >= this → possible dup (flag, continue)
 
 # --------------------------------------------------------------------------- #
 # RUBRIC — how an item is judged. The orchestrator scores each dimension 0..max
@@ -127,13 +128,29 @@ dedup:
 # only understands the reference keys — see engine/scoring.py.)
 # --------------------------------------------------------------------------- #
 rubric:
-  threshold: 65                   # advance if total >= this (max here is 100)
-  dimensions:
-    - {key: frequency,                     max: 25, hint: "how many independent sources / how often it recurs"}
-    - {key: intensity,                     max: 20, hint: "how acute — wasted hours, gave up, blocked"}
-    - {key: agent_solvable_or_explainable, max: 25, hint: "can an agent build a fix OR clearly explain it"}
-    - {key: solution_gap,                  max: 15, hint: "is there no good existing solution"}
-    - {key: strategic_fit,                 max: 15, hint: "fit to your domain/audience"}
+    threshold: 65 # advance if total >= this (max here is 100)
+    dimensions:
+        - {
+              key: frequency,
+              max: 25,
+              hint: "how many independent sources / how often it recurs",
+          }
+        - {
+              key: intensity,
+              max: 20,
+              hint: "how acute — wasted hours, gave up, blocked",
+          }
+        - {
+              key: agent_solvable_or_explainable,
+              max: 25,
+              hint: "can an agent build a fix OR clearly explain it",
+          }
+        - {
+              key: solution_gap,
+              max: 15,
+              hint: "is there no good existing solution",
+          }
+        - { key: strategic_fit, max: 15, hint: "fit to your domain/audience" }
 
 # --------------------------------------------------------------------------- #
 # RESEARCH LANES — parallel investigation before routing. All lanes must finish
@@ -141,26 +158,26 @@ rubric:
 # router reads.
 # --------------------------------------------------------------------------- #
 research_lanes:
-  role: researcher                # which role runs the lanes (mapped via roles:)
-  lanes:
-    - verify_sources              # is the pain real, attributable, not one rant?
-    - prior_context               # what's already known / related history?
-    - existing_solutions_audit    # what already solves this? → emits the classifier
-  classifier_lane: existing_solutions_audit
+    role: researcher # which role runs the lanes (mapped via roles:)
+    lanes:
+        - verify_sources # is the pain real, attributable, not one rant?
+        - prior_context # what's already known / related history?
+        - existing_solutions_audit # what already solves this? → emits the classifier
+    classifier_lane: existing_solutions_audit
 
 # --------------------------------------------------------------------------- #
 # ROUTE — map the classifier's value to a path. Every value on the right MUST be
 # a key under `paths:` below. Edit this map to change routing logic — no code.
 # --------------------------------------------------------------------------- #
 route:
-  classifier: existing_solutions_audit.solution_quality
-  map:
-    missing: build
-    broken: build
-    confusing: video
-    poorly_documented: video
-    outdated: video
-    good: shelve
+    classifier: existing_solutions_audit.solution_quality
+    map:
+        missing: build
+        broken: build
+        confusing: video
+        poorly_documented: video
+        outdated: video
+        good: shelve
 
 # --------------------------------------------------------------------------- #
 # PATHS — what happens per route outcome. Each path has:
@@ -172,44 +189,44 @@ route:
 # Roles (analyst, builder, …) are mapped to profiles under `roles:`.
 # --------------------------------------------------------------------------- #
 paths:
-  build:
-    prep:
-      - {stage: synthesize_problem, role: analyst}
-      - {stage: solution_ideation,  role: analyst}
-    propose: {role: orchestrator, template: paths/proposals/build.md}
-    fulfill:
-      - {stage: prototype_build, role: builder}
-      - {stage: test_run,        role: tester}
-      - {stage: final_report,    role: orchestrator}
-    workspace_subdir: builds
-    scope_rails: paths/rails/build.md
+    build:
+        prep:
+            - { stage: synthesize_problem, role: analyst }
+            - { stage: solution_ideation, role: analyst }
+        propose: { role: orchestrator, template: paths/proposals/build.md }
+        fulfill:
+            - { stage: prototype_build, role: builder }
+            - { stage: test_run, role: tester }
+            - { stage: final_report, role: orchestrator }
+        workspace_subdir: builds
+        scope_rails: paths/rails/build.md
 
-  video:
-    prep:
-      - {stage: tutorial_research, role: video_producer}
-      - {stage: outline,           role: video_producer}
-    propose: {role: orchestrator, template: paths/proposals/video.md}
-    fulfill:
-      - {stage: slides_builder,    role: video_producer}
-      - {stage: script_writer,     role: video_producer}
-      - {stage: final_deliverable, role: orchestrator}
-    workspace_subdir: videos
-    deliverable_spec: paths/specs/video.md
+    video:
+        prep:
+            - { stage: tutorial_research, role: video_producer }
+            - { stage: outline, role: video_producer }
+        propose: { role: orchestrator, template: paths/proposals/video.md }
+        fulfill:
+            - { stage: slides_builder, role: video_producer }
+            - { stage: script_writer, role: video_producer }
+            - { stage: final_deliverable, role: orchestrator }
+        workspace_subdir: videos
+        deliverable_spec: paths/specs/video.md
 
-  shelve:
-    auto: true                    # nothing exists worth building or explaining
+    shelve:
+        auto: true # nothing exists worth building or explaining
 
 # --------------------------------------------------------------------------- #
 # ROLES — map abstract roles (used above) to real Hermes profiles. The
 # scaffolder (cli/triage.py scaffold) can create these profiles for you.
 # --------------------------------------------------------------------------- #
 roles:
-  orchestrator:   default
-  researcher:     researcher
-  analyst:        analyst
-  builder:        builder
-  tester:         tester
-  video_producer: video_producer
+    orchestrator: default
+    researcher: researcher
+    analyst: analyst
+    builder: builder
+    tester: tester
+    video_producer: video_producer
 
 # --------------------------------------------------------------------------- #
 # GATE — the single human approval point. The orchestrator maps these reply
@@ -217,8 +234,8 @@ roles:
 # is Hermes command-execution approval, not this workflow's proposal action.
 # --------------------------------------------------------------------------- #
 gate:
-  channel: discord
-  target: discord:1484142557704491119  # Gaymerz / #briefs
-  approve: [approve]
-  shelve:  [shelve, "reject the rest"]
-  modify:  [modify]
+    channel: discord
+    target: discord:1484142557704491119 # Gaymerz / #briefs
+    approve: [approve]
+    shelve: [shelve, "reject the rest"]
+    modify: [modify]

@@ -43,16 +43,20 @@ the item file (`ItemVault.create_item`, `status: triage`).
 
 The orchestrator scores each rubric dimension (using `TriageEngine.rubric_prompt()`)
 and hands the breakdown to `TriageEngine.score()`, which applies maxes + threshold.
-Below threshold → **auto-shelve, don't bother the human.** Write `score` /
-`score_breakdown` to the item file either way.
+Below threshold → the orchestrator skill says to **shelve without bothering the
+human**. This is model-applied behavior, not an engine side effect. Write both
+`score` and `score_breakdown` to the item file either way.
 
 - Code: `engine/scoring.py`.
 
-## Stage 4 — Research fan-out (engine builds cards)
+## Stage 4 — Research fan-out (engine generates lane specs)
 
-`TriageEngine.research_specs(slug, triage_id)` returns the parallel lane cards
-(all parented to the triage card). The orchestrator creates them plus a single
-`route` card parented to **all** lanes.
+`TriageEngine.research_specs(slug, triage_id)` returns parallel lane specs, all
+parented to the supplied triage id. The orchestrator skill is instructed to
+create them plus a single `route` card parented to all lanes. The skill then tells
+the orchestrator to mark the triage parent `done`, releasing all lanes together.
+The engine does not create that route card or complete the root, so this remains
+model-applied orchestration rather than an engine guarantee.
 
 - ⚠️ **This is the fan-in pattern** — the route card auto-fires when the last lane
   finishes. No polling. See docs/02.
@@ -67,8 +71,10 @@ maps it to a path name; the orchestrator writes `path: <name>` on the item. An
 
 ## Stages 6–7 — Prep + propose
 
-`TriageEngine.prep_specs(slug, path)` builds the pre-gate chain. When it finishes,
-the orchestrator drafts the proposal from `paths/proposals/<path>.md`, sets
+`TriageEngine.prep_specs(slug, path)` returns ordered pre-gate specs with no
+parent links. The orchestrator must create and link them sequentially. When that
+caller-managed chain finishes, it drafts the proposal from
+`paths/proposals/<path>.md`, sets
 `status: awaiting_approval`, and **sends it**.
 
 - ⚠️ **Gotcha — delivery ≠ status.** The orchestrator is a headless worker. It
@@ -96,16 +102,19 @@ chain via `TriageEngine.fulfillment_specs()`.
   workspaces are wiped between tasks, which strands the final delivery step. The
   engine already does this — don't switch it to scratch.
 - ⚠️ **Gotcha — first stage `ready`.** The first fulfillment card has no blocking
-  parent so it lands `ready`; the rest chain off it. A child of the open triage
-  card would sit in `todo` forever.
-- The final stage delivers to the human (`hermes send`).
+  parent so it lands `ready`; the rest chain off it. This deliberately avoids
+  depending on the lifecycle of the pre-gate triage/root card.
+- The orchestrator skill instructs a later model turn to deliver after the final
+  stage. There is no deterministic completion hook or correlation adapter in
+  this repository that guarantees the send.
 
 ## Cost gate (cross-cutting)
 
-`scripts/cost_report.py <slug>` sums per-item spend from board telemetry and
-compares to `cost_gate_usd`. Over before the gate → pause + ask; over after
-approval → notify + continue. Degrades to "telemetry unavailable" if your Hermes
-build doesn't expose cost columns — adjust the SQL there for your schema.
+`scripts/cost_report.py <slug>` is a standalone probe that sums per-item spend
+from board telemetry and compares it to `cost_gate_usd`. The orchestrator and
+engine do not call it automatically, so pause/notify policy is not currently
+enforced. It degrades to "telemetry unavailable" if your Hermes build doesn't
+expose cost columns; adjust the SQL there for your schema.
 
 ## Failure handling
 

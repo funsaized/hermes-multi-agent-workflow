@@ -18,8 +18,9 @@ default format below is simple and LLM-friendly:
     Why it may matter: <one line>
 
 If you change the fields a scout emits (see `item_schema` in triage.yaml), keep
-this parser and the scout skill in sync. The three fields the rest of the engine
-relies on are `title`, `claim`, and `sources`.
+this parser and the scout skill in sync. The parser's minimum handoff fields are
+`title`, `claim`, and `sources`; deterministic reference-domain heuristic scoring
+accepts additional mapping keys documented in `score_candidate_heuristic()`.
 """
 from __future__ import annotations
 

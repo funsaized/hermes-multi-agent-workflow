@@ -43,12 +43,12 @@ that belongs in config.
 
 ## Architecture in one paragraph
 
-**Fat engine, thin skill.** Everything deterministic (dedup, scoring math, route
-resolution, building the research fan-out and the post-gate task chains, choosing
-workspaces) is Python in `engine/engine.py::TriageEngine`. The orchestrator
-*skill* is reduced to the few steps needing a model's judgment (proposing rubric
-scores, classifying research, writing proposal prose). This keeps the moving
-parts testable. Read `docs/01-architecture.md`.
+**Fat engine, thin skill.** Deterministic calculations and task-spec generation
+(dedup, scoring math, route resolution, lane/stage specs, workspace selection)
+live in `engine/engine.py::TriageEngine`. The post-gate handler applies and links
+fulfillment specs. Pre-gate route-card creation, root completion, and prep linking
+still live in orchestrator prose; do not describe them as engine-enforced until a
+deterministic adapter exists. Read `docs/01-architecture.md`.
 
 ## How to help the human adapt it (the standard flow)
 
@@ -59,13 +59,14 @@ Follow `docs/04-adapting-to-your-domain.md`. In short:
    should *produce*.
 2. **Rewrite `triage.yaml`** to match — sources, item_schema, rubric, research
    lanes, route map, paths, roles.
-3. **Rewrite the markdown templates** under `paths/` (rails, specs, proposals) and
-   the scout `query` + orchestrator notes in `skills/templates/`.
+3. **Rewrite the markdown templates** under `paths/` (rails, specs, proposals),
+   each `sources[].query`, and any shared behavior in `skills/templates/`.
 4. **Validate:** `python -m cli.triage validate` until it's clean.
 5. **Keep tests green:** `python -m unittest discover -s tests`. Add domain cases.
 6. **Scaffold:** `python -m cli.triage scaffold` prints the Hermes setup plan
-   (profiles, skills, board, crons). Walk the human through it; see
-   `docs/07-runbook.md`.
+   (board, profiles, toolsets, cron, gateways, and skill-install checkpoints).
+   `python -m cli.triage render-skills` separately writes staged skill files.
+   Walk the human through both; see `docs/07-runbook.md`.
 
 ## Hard-won gotchas baked into this template (do not regress)
 
@@ -83,15 +84,16 @@ These cost real debugging in the system this was extracted from. Preserve them:
 - **Gate replies are ordinary text.** Use `approve <slug>`, not `/approve`;
   Hermes reserves `/approve` for command-execution approval.
 - **First task in a post-gate chain must be `ready` (no blocking parent).** A
-  child of the still-open triage task would sit in `todo` forever.
+  parent edge would make fulfillment depend unnecessarily on pre-gate task state.
 
 `docs/05-pipeline-stages.md` explains each in context.
 
 ## Safety / publishing (the human cares about this)
 
 This template runs LLM-authored code (the build path) and shells out, behind one
-human gate. The **scope rails** (`paths/rails/*.md`) are the safety boundary —
-keep them tight. Before the human publishes their adapted version, do a security
+human gate. The **scope rails** (`paths/rails/*.md`) are model-visible policy, not
+a sandbox; keep them tight and enforce least privilege separately. Before the
+human publishes their adapted version, do a security
 pass and make sure **no secrets ship**: never commit `.env`, `auth.json`, board
 `*.db`, or the `work/`/vault contents. The `.gitignore` covers these — verify it.
 Read `docs/06-security.md`.

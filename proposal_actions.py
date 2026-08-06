@@ -117,9 +117,9 @@ def action_approve(slug: str) -> dict[str, Any]:
     conn = store.connect()
     created: list[dict[str, Any]] = []
     try:
-        # First stage: `ready` now (no blocking parent — a child of the still-open
-        # triage task would sit in `todo` forever). Each later stage parents to the
-        # previous so the kernel promotes it exactly when its predecessor finishes.
+        # First stage: `ready` now and independent of pre-gate task state. Each
+        # later stage parents to the previous so the kernel promotes it exactly
+        # when its predecessor finishes.
         prev_id: str | None = None
         for spec in specs:
             task_id = store.create_task(

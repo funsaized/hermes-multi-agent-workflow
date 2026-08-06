@@ -1,15 +1,18 @@
 """Thin writer over the Hermes Kanban SQLite board.
 
-The Kanban board is the inter-agent bus. The engine creates tasks (cards) on it;
-the Hermes gateway's dispatcher claims `ready` cards and spawns the assigned
-agent. Parent links drive fan-in: a child task stays `todo` until every parent is
-`done`, then the kernel auto-promotes it to `ready`.
+The Kanban board is the inter-agent bus. Edge adapters such as
+`proposal_actions.py` create cards from engine task specs; the Hermes gateway's
+dispatcher claims `ready` cards and spawns the assigned agent. Parent links drive
+fan-in: a child task stays `todo` until every parent is `done`, then Hermes
+promotes it to `ready`.
 
 This is generic Hermes plumbing — you should not need to edit it. The only
 domain-ish constant is `created_by`, a free-text provenance tag.
 
-NOTE: this writes the Hermes board schema directly. If a future Hermes release
-changes the `tasks` columns, update the INSERT here. See `docs/02-the-board.md`.
+NOTE: this writes the Hermes board schema directly. It depends on columns in
+`tasks` plus the `task_links`, `task_comments`, and `task_events` tables. If a
+future Hermes release changes that schema, update this adapter. See
+`docs/02-the-board.md`.
 """
 from __future__ import annotations
 

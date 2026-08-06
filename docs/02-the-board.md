@@ -22,10 +22,11 @@ via the `roles:` block, so your config talks in roles and the board gets profile
 
 ## The dispatcher
 
-The Hermes **gateway** runs a dispatcher loop: it finds `ready` cards, claims one
-atomically, spawns the assigned agent in its own workspace, and marks the card
-`done` when the agent finishes — then repeats. It covers **all** boards. You don't
-write this; you just keep the gateway running (`docs/07-runbook.md`).
+The configured Hermes **gateway** runs the sole dispatcher loop: it finds `ready`
+cards across boards, claims one atomically, spawns the assigned agent in its own
+workspace, and marks the card `done` when the agent finishes — then repeats.
+Cron-owning scout gateways have dispatch disabled; keep the configured dispatcher
+gateway and each scout scheduler gateway running (`docs/07-runbook.md`).
 
 ## Fan-in (the part that makes it event-driven)
 
@@ -33,21 +34,25 @@ A card with parents starts in `todo` and **auto-promotes to `ready` only when
 every parent is `done`.** That single rule gives you parallelism + sequencing with
 no polling:
 
-- The research lanes are all parented to the triage card → they run in parallel.
+- The research lane specs are all parented to the triage card. They become
+  runnable together only after that parent is marked `done`.
 - A `route` card is parented to **all** the lanes → it fires the instant the last
   lane finishes.
 - The post-gate fulfillment chain links each stage to the previous → they run in
   order.
 
-`engine.research_specs()` and `engine.fulfillment_specs()` build exactly these
-parent relationships. See the parent-linking in `proposal_actions.py::action_approve`.
+`engine.research_specs()` records the supplied root parent on each lane spec.
+`engine.fulfillment_specs()` returns ordered specs with empty parents;
+`proposal_actions.py::action_approve` creates those cards and links each later
+stage to its predecessor. No equivalent deterministic pre-gate adapter currently
+creates the route card or links prep specs; the orchestrator skill instructs its
+model to do both and to complete the triage root after wiring the fan-out.
 
 ## Two board gotchas the engine already handles
 
-1. **First post-gate task must be `ready`, not `todo`.** If you parent the first
-   fulfillment task to the still-open triage card, it waits forever (the triage
-   card never completes). The handler creates the first stage with *no* parent
-   (so it's `ready`) and chains the rest. Don't "fix" this by parenting it.
+1. **First post-gate task is deliberately `ready`, not `todo`.** The handler
+   creates it with *no* parent and chains the rest. This keeps post-gate readiness
+   independent of the already-completed pre-gate root card.
 
 2. **`KanbanStore.create_task`** sets status from parents: none → `ready`, some →
    `todo`. That's the whole promotion contract; respect it when you create cards

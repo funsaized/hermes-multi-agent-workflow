@@ -1,8 +1,9 @@
-# BUILD scope rails (HARD limits)
+# BUILD scope rails (model-visible policy)
 
 > This file is inlined into every `build`-path worker's task body by the engine.
-> It is the safety boundary on what an autonomous agent is allowed to build.
-> **Adapt it to your domain and your risk tolerance.** Keep it tight — vague
+> It states what an autonomous agent is allowed to build, but prompt text is not
+> a sandbox or technical enforcement boundary. **Adapt it to your domain and your
+> risk tolerance.** Keep it tight — vague
 > rails are the difference between a useful prototype and an agent wandering off
 > to build a SaaS app.
 
@@ -29,4 +30,5 @@
 
 Shelve it and say why, OR consider whether a different path applies (e.g. an
 existing-but-confusing solution → the `video` path). **Do not expand the rails to
-fit a proposal.** The rails are the contract.
+fit a proposal.** Treat them as binding model policy, backed by the human gate and
+least-privilege tooling rather than by prompt text alone.

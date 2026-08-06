@@ -1,10 +1,9 @@
-# Reference implementation — the pain-point pipeline
+# Historical reference design — the pain-point pipeline
 
-> This is a **reference write-up only.** It describes the real, working pipeline
-> this template was extracted from, so you can see one complete instantiation of
-> the engine before adapting it. It contains no secrets, IDs, or machine
-> specifics — just the architecture and the decisions behind it. The live config
-> for this instance is the repo-root `triage.yaml`.
+> This is a **historical design write-up only**, retained to explain the system
+> that inspired the template. It is not proof that the current repository runs
+> end to end, and its old names, paths, roles, and delivery wording are not
+> deployment instructions. `triage.yaml` is the only current configuration.
 
 ## What it is
 
@@ -59,7 +58,7 @@ scouts (cron, staggered)  →  intake card on the board
         │
    BUILD:  prototype → test → report          VIDEO: slides → script → deliver
         │
-   delivered to the human (DM)
+   delivered to the configured human-gate target
 ```
 
 ## The rubric
@@ -78,22 +77,25 @@ chain differ. In the engine this is just two entries under `paths:`.
 ## Why one human gate
 
 The build path is the most expensive, error-prone stage, and agent-tested
-agent-code shares blind spots. Gating *before* fulfillment bounds cost and keeps a
-person in control of what actually ships. Below-threshold items are dropped
+agent-code shares blind spots. Gating *before* fulfillment keeps a person in
+control of what actually ships.
+The current repository does not automatically enforce the configured cost
+threshold. Below-threshold items are intended to be dropped
 automatically, so the human only ever sees things worth a decision.
 
-## Hard scope rails (build path)
+## Scope-rail policy (build path)
 
 Acceptable build targets are bounded on purpose: a Hermes skill/plugin, a CLI
 tool, a markdown playbook, a small script, or a cron + skill. Explicitly **not**:
 full SaaS apps, stateful auth flows, anything needing un-provisioned keys, or real
 UI beyond a dashboard plugin. When a proposal doesn't fit, it's shelved or
-re-routed — the rails are never widened to fit. This is the safety boundary.
+re-routed — the rails are never widened to fit. These are model-visible policy,
+not a technical sandbox.
 
-## Lessons that became engine guarantees
+## Operational lessons carried into the template
 
-These cost real debugging and are now baked into the template so you don't repeat
-them (see `docs/05-pipeline-stages.md`):
+These informed the template, though not all are deterministic engine guarantees
+(see `docs/05-pipeline-stages.md`):
 
 - Scouts run via cron, not the dispatcher, so they need the `kanban` toolset
   explicitly — otherwise they write a report but can't create the intake card.
@@ -101,13 +103,14 @@ them (see `docs/05-pipeline-stages.md`):
   between tasks and strand the final delivery step.
 - A headless orchestrator must actively send messages — setting a status field
   notifies no one.
-- The first post-gate task must be created `ready` (no blocking parent) or it
-  waits forever behind the still-open triage card.
+- The first post-gate task is created `ready` with no blocking parent so its
+  readiness is independent of pre-gate task state.
 - Gate replies use ordinary text; `/approve` is reserved for Hermes execution approval.
 
-## What this instance proves
+## What the origin system reportedly demonstrated
 
-It ran end-to-end autonomously: scouts surfaced candidates, the rubric shelved the
-weak ones, research and routing ran on the board, a proposal reached the human,
-one approval spawned the fulfillment chain, and a finished deliverable was sent
-back — all without manual steps between intake and the gate.
+The origin system reportedly ran end-to-end: scouts surfaced candidates, the
+rubric shelved the weak ones, research and routing ran on the board, a proposal
+reached the human, one approval spawned the fulfillment chain, and a finished
+deliverable was sent back. That historical report is not a verification result
+for this repository.

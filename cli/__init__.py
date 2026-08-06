@@ -1,1 +1,1 @@
-"""Command-line helpers for the Hermes Multi-Agent Workflow (init / validate / scaffold / install)."""
+"""CLI helpers: validate, preflight, scaffold, render-skills, and init/install stubs."""

@@ -44,7 +44,7 @@ class FakeRunner:
             }
             return CommandResult(0, flags.get(argv, ""), "")
         if argv == ("hermes", "kanban", "boards", "list", "--json"):
-            boards = [{"slug": "pain-point"}] if self.deployed else []
+            boards = [{"slug": CONFIG.board}] if self.deployed else []
             return CommandResult(0, json.dumps(boards), "")
         if argv == ("hermes", "profile", "list"):
             names = " ".join(EXPECTED_PROFILES) if self.deployed else "default"
@@ -135,7 +135,7 @@ class PreflightTests(unittest.TestCase):
 
         self.assertFalse(report.ok)
         self.assertTrue(any("0.19.9" in error for error in report.errors))
-        self.assertTrue(any("pain-point" in error for error in report.errors))
+        self.assertTrue(any(CONFIG.board in error for error in report.errors))
         self.assertTrue(any("triage-scout-x" in error for error in report.errors))
         self.assertTrue(any("discord:1484142557704491119" in error for error in report.errors))
 

@@ -43,6 +43,7 @@ class ManualCheckpoint:
     phase: str
     description: str
     verification: tuple[str, ...]
+    # Retained for a stable serialized step shape; renderers execute argv only on CommandStep.
     argv: None = None
     profile: str | None = None
     mutates: bool = False
@@ -211,7 +212,7 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
         steps.append(
             CommandStep(
                 phase="cron",
-                description=f"Disable Kanban dispatch on cron-owning scout gateway {name!r}.",
+                description=f"Disable Kanban dispatch on cron-owning scout scheduler gateway {name!r} (no messaging channel).",
                 argv=("hermes", "-p", name, "config", "set", "kanban.dispatch_in_gateway", "false"),
                 profile=name,
             )
@@ -253,7 +254,7 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
             description="Verify the deployed topology before relying on scheduled intake.",
             verification=(
                 f"Confirm exactly one Kanban dispatcher is active: profile {gateway!r}.",
-                "Confirm the configured gateway is already running, and each cron-owning scout gateway is running with its profile-local cron registered.",
+                "Confirm the configured messaging gateway is running, and each cron-owning scout scheduler gateway is running without messaging credentials and with its profile-local cron registered.",
                 f"Run one scout manually and verify it creates an intake task on board {cfg.board!r}.",
                 f"Verify the human gate can deliver through {cfg.gate.channel!r} and receive a non-slash reply.",
             ),

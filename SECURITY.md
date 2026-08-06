@@ -11,10 +11,12 @@ Key points:
 
 - **Untrusted input → model context.** Scouts fetch web content that becomes task
   bodies a model reads. This is a prompt-injection surface. The human gate and the
-  per-path **scope rails** (`paths/rails/*.md`) are the controls that sit between
-  untrusted input and any privileged action. Keep the rails tight.
-- **The human gate is mandatory.** It bounds cost and keeps a person between
-  research and fulfillment. Do not modify it to auto-approve.
+  per-path **scope rails** (`paths/rails/*.md`) are model-visible policy between
+  untrusted input and privileged work; they are not technical enforcement. Keep
+  the rails tight and restrict tools/credentials separately.
+- **The human gate is mandatory.** It keeps a person between research and
+  fulfillment. The configured cost threshold is not automatically enforced.
+  Do not modify the gate to auto-approve.
 - **Least privilege.** Give each Hermes profile the minimum toolset for its role.
 
 ## Never commit secrets

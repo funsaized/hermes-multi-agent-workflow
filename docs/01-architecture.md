@@ -14,10 +14,10 @@ into Python and leaves the skill only what needs **judgment**.
                                          ▼
    ┌──────────────────────────  engine/  (generic, testable) ───────────────────┐
    │ config.py    TriageConfig — typed view + validation                         │
-   │ engine.py    TriageEngine — dedup · score · route · build task chains       │
+   │ engine.py    TriageEngine — dedup · score · route · generate task specs     │
    │ scoring.py   apply rubric (LLM-breakdown mode + deterministic mode)         │
    │ routing.py   classification → path                                          │
-   │ dedup.py     similarity (token-cosine; embedding-ready)                     │
+   │ dedup.py     similarity (token-cosine; embedding backend is not wired)       │
    │ item_vault   one md file per item   kanban_store  writes the board          │
    └───────────────────────────────┬────────────────────────────────────────────┘
                                     │ called by
@@ -43,25 +43,32 @@ into Python and leaves the skill only what needs **judgment**.
 ## What the engine does NOT do
 
 The engine returns **task specs** (plain dataclasses: title/body/role/parents/
-workspace) rather than touching the board itself, except in `proposal_actions.py`
-and (at runtime) the orchestrator, which turn specs into real cards via
-`KanbanStore`. This keeps the planning logic pure and unit-testable; side effects
-live at the edges.
+workspace) rather than touching the board itself. `proposal_actions.py` applies
+and links post-gate fulfillment specs through `KanbanStore`; the orchestrator
+skill is currently responsible for applying the pre-gate specs and constructing
+the route fan-in card. This keeps calculations pure, but the pre-gate DAG is not
+yet fully enforced by deterministic code.
 
 ## Data flow of one item
 
 1. A **scout** writes a report and creates an `intake` card (it only detects).
-2. The **orchestrator** parses it, asks the engine for dedup matches, scores it
+2. The **orchestrator skill is intended to** parse it, ask the engine for dedup
+   matches, score it
    (judgment, validated by the engine), and — if it clears the bar — creates a
    triage card plus the **research fan-out** (`engine.research_specs`).
-3. Research lanes run in parallel; a **route** card fan-ins on all of them.
+3. `research_specs()` returns lane specs parented to a supplied root id. The
+   orchestrator skill tells the caller to create a **route** card parented to all
+   lanes, then complete the root to release the lanes; the engine itself does
+   neither today.
 4. The orchestrator reads the classifier's output and calls `engine.route()` to
-   pick a path, then spawns that path's **prep** chain (`engine.prep_specs`).
+   pick a path. `engine.prep_specs()` returns ordered specs, but the caller must
+   create and link them into the **prep** chain.
 5. It drafts a proposal and **sends it to the human** (`hermes send`).
 6. The human replies; the orchestrator shells to `proposal_actions.py`, which
    reads `paths.<path>.fulfill` and spawns the **fulfillment** chain in a shared
    persistent workspace (`engine.fulfillment_specs`).
-7. The final stage **delivers** to the human.
+7. Delivery remains an orchestrator instruction after the final task; this repo
+   has no deterministic completion hook that sends it automatically.
 
 ## Where to extend (mechanism, not topic)
 

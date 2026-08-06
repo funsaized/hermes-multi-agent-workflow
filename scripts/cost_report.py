@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Per-item LLM-spend report for the cost gate.
+"""Standalone per-item LLM-spend report for a prospective cost gate.
 
 Walks the triage board for the tasks linked to an item and sums their cost
-telemetry. Used to enforce `cost_gate_usd` from triage.yaml:
-  - over budget BEFORE the gate → orchestrator pauses + notifies
-  - over budget AFTER approval  → orchestrator notifies + continues
+telemetry and compares it with `cost_gate_usd` from triage.yaml. Nothing in the
+current orchestrator or engine invokes this script automatically, so it reports
+budget state but does not enforce pause/notify behavior.
 
 Usage:
   python scripts/cost_report.py <slug> [--gate 5]   # exits non-zero if over --gate
@@ -41,9 +41,8 @@ def sum_cost(db: Path, task_ids: list[str]) -> float | None:
         return None
     conn = sqlite3.connect(str(db))
     try:
-        # TODO: adjust to your Hermes telemetry schema. Common shapes:
-        #   tasks.cost_usd, or a task_runs/usage table with a cost column.
-        # We probe for a `cost_usd` column on tasks; absent → telemetry unavailable.
+        # This implementation probes only `tasks.cost_usd`; absent means telemetry
+        # unavailable. Add explicit probes/joins here for other Hermes schemas.
         cols = {r[1] for r in conn.execute("PRAGMA table_info(tasks)")}
         if "cost_usd" not in cols:
             return None

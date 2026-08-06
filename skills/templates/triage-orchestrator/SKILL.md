@@ -3,9 +3,9 @@ name: triage-orchestrator
 description: >
   The pipeline driver for the Hermes Multi-Agent Workflow. Triggered by new `intake`
   tasks on the triage board. Dedups, scores, fans out research, routes, proposes
-  at the human gate, and on approval lets the engine spawn the fulfillment chain.
-  It is DELIBERATELY THIN: it calls engine/* for every deterministic step and
-  only supplies judgment (scoring, classification, proposal prose).
+  at the human gate, and on approval delegates fulfillment-chain creation to the
+  handler. It calls engine/* for deterministic calculations/spec generation and
+  applies the remaining pre-gate board edges itself.
 metadata:
   hermes:
     tags: [triage, orchestrator]
@@ -14,10 +14,11 @@ metadata:
 # Triage orchestrator (thin driver)
 
 > **Design contract:** fat engine, thin skill. Anything deterministic —
-> dedup lookup, applying the score threshold, route resolution, building research
-> fan-out, building the prep/fulfillment chains, choosing workspaces — is a call
-> into `engine/`. You (the model) only do what needs judgment. Do NOT re-derive
-> the pipeline shape in prose here; it lives in `triage.yaml`. Read
+> dedup lookup, applying the score threshold, route resolution, generating lane
+> and stage specs, choosing workspaces — is a call into `engine/`. You still apply
+> pre-gate specs and parent edges to the board; only the post-gate handler applies
+> and links fulfillment specs deterministically. Do not invent a pipeline shape;
+> it lives in `triage.yaml`. Read
 > `docs/01-architecture.md` and `docs/05-pipeline-stages.md`.
 
 All commands below run from `{{PROJECT_ROOT}}` with `triage.yaml` present and
@@ -56,12 +57,14 @@ Write `score` / `score_breakdown` to the item file regardless of outcome.
 (For a deterministic/offline pass you may instead call
 `TriageEngine.score_heuristic(candidate)` — see engine/scoring.py.)
 
-### 4. Research fan-out (engine builds the cards)
+### 4. Research fan-out (engine returns specs; you create the cards)
 Create one triage root task, then create the research lane cards from
 `TriageEngine.research_specs(slug, triage_id)` — they run in parallel, all
 parented to the triage task. Create a single `route` card parented to ALL lanes
 so the kernel fires it the instant the last lane finishes (fan-in). Assign the
-`route` card back to yourself.
+`route` card back to yourself. After every lane and the route card exist, mark the
+triage root `done`; that releases all lanes together. Do not leave the root open,
+or every lane remains `todo` forever.
 
 ### 5. Route (deterministic — call the engine)
 When the route card fires, read the classifier value the classifier lane emitted
@@ -69,9 +72,11 @@ When the route card fires, read the classifier value the classifier lane emitted
 `TriageEngine.route(classification)` → a path name. Write `path: <name>` on the
 item. If the path is `auto` (e.g. `shelve`), close out — no proposal.
 
-### 6. Prep + propose (engine builds prep; you write the proposal)
-Spawn the path's prep chain from `TriageEngine.prep_specs(slug, path)`. When prep
-finishes, draft the proposal using the path's proposal template
+### 6. Prep + propose (engine returns ordered prep specs)
+Call `TriageEngine.prep_specs(slug, path)`, create the returned cards in order,
+and parent each card after the first to its predecessor. The engine does not add
+those parent links. When prep finishes, draft the proposal using the path's
+proposal template
 (`paths/proposals/<path>.md`), set item `status: awaiting_approval`, and **send it
 to the human** — you MUST actually deliver it:
 ```
@@ -92,7 +97,8 @@ On `approve`, the handler reads `paths.<path>.fulfill` from triage.yaml and
 spawns the post-gate chain in a shared persistent workspace. You do nothing else.
 
 ### 8. Deliver
-When the final fulfillment stage completes, DM the deliverable to the human
+When the final fulfillment stage completes, send the deliverable to the
+configured target
 (`hermes send --to {{GATE_TARGET}} --file <deliverable>`).
 
 ## Rules

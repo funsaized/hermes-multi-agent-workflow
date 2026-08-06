@@ -2,10 +2,11 @@
 
 This template validates, unit-tests, and renders a deployment plan out of the
 box, but going live is still a human-driven sequence of Hermes 0.20 commands.
-The engine produces typed metadata, validates it, runs a read-only preflight
-against your installed Hermes, renders a dry-run plan, and writes local copies
-of profile-specific skills. **The engine itself never mutates your live Hermes
-home** — `python -m cli.triage install` is intentionally a stub.
+The CLI and engine produce typed metadata, validate it, run a read-only preflight
+against your installed Hermes, render a dry-run plan, and write local copies
+of profile-specific skills. These deployment surfaces do not mutate your live
+Hermes home — `python -m cli.triage install` is intentionally a stub. Runtime
+`proposal_actions.py` is separate and does mutate the configured board and vault.
 
 The split:
 
@@ -18,6 +19,12 @@ The split:
 | `install`                   | Stub. Not implemented; deferred.                       | No              |
 
 You execute the scaffolded commands and the manual install yourself.
+
+> **Runtime maturity boundary:** this runbook can establish the board, profiles,
+> skills, cron jobs, and gateways. It does not make the pipeline end-to-end
+> complete. Pre-gate route-card creation, triage-root completion, prep linking,
+> inbound reply correlation, and final delivery triggering are still
+> orchestrator-skill responsibilities without deterministic integration tests.
 
 > Commands assume `hermes` is on `PATH`. Hermes 0.20 uses
 > `hermes -p <profile>` to target a profile; aliases are optional convenience
@@ -58,6 +65,12 @@ The configured `base_profile` is treated as pre-existing: the plan does not
 recreate it, overwrite its default working directory, or install a second
 gateway for it. This example sets `gateway_profile: default`, reusing the root
 Discord gateway as the sole dispatcher and inbound human-gate listener.
+
+Hermes cron is ticked by a profile-local gateway process. Therefore each
+`owns_cron: true` scout gets a scheduler gateway service, but it is **not another
+Discord gateway**: no Discord token/channel is installed there, cron delivery is
+local, and `kanban.dispatch_in_gateway` is false. Worker-only profiles get no
+gateway service.
 
 By default, `scaffold` first performs the same read-only live inspection as
 `preflight` and reports blockers to stderr while still rendering the plan. Use
@@ -187,11 +200,13 @@ not script it.
 ## 9. Model + provider auth (manual checkpoints)
 
 The scaffold emits one `CHECKPOINT:` per profile for model/provider selection
-and provider authentication. Per-profile auth is **not** shared: authentication
-on `default` does not cover `xresearch`. Use each profile's
-interactive login flow (or `hermes profile show` to inspect the resolved
-config) and never commit credentials. The planner does not invent provider
-commands; it surfaces the requirement and stops.
+and provider authentication. Do not assume a cloned profile has every
+model/provider credential it needs.
+Inspect each profile's resolved model and auth state, then use its interactive
+login flow where required. Host-level CLI credentials can also remain visible
+depending on Hermes `terminal.home_mode`; that is separate from the profile's
+Hermes provider configuration. Never commit credentials. The planner does not
+invent provider commands; it surfaces the requirement and stops.
 
 > Web-search keys and similar `.env` values belong in each profile's `.env`.
 > They are part of the auth checkpoint, not the toolset. The repo's
@@ -199,10 +214,13 @@ commands; it surfaces the requirement and stops.
 
 ## 10. Configure the gate channel
 
-The gate uses the existing root/default Discord gateway. Keep its credentials in
-`$HERMES_HOME/.env` (not in this repository): `DISCORD_BOT_TOKEN`,
-`DISCORD_ALLOWED_USERS`, and `DISCORD_HOME_CHANNEL`. The configured target is
-`discord:1484142557704491119` (`Gaymerz / #briefs`). Verify target discovery:
+The gate uses the existing root/default Discord gateway and therefore reuses its
+existing token and authorization. Do not copy those secrets into this repository
+or scout profiles. A fresh Hermes installation needs `DISCORD_BOT_TOKEN` plus an
+inbound authorization method such as `DISCORD_ALLOWED_USERS`, a gateway-wide
+allowlist, role authorization, or pairing; an already-working gateway does not
+need duplicate values. The configured target is `discord:1484142557704491119`
+(`Gaymerz / #briefs`). Verify target discovery:
 
 ```bash
 hermes -p default gateway status
@@ -240,7 +258,7 @@ to this repository.
 After creation:
 
 ```bash
-hermes -p <scout> cron list --all        # both jobs present under the right profile
+hermes -p <scout> cron list --all        # that scout's configured job(s) are present
 hermes -p <scout> cron status            # scheduler running
 ```
 
@@ -275,10 +293,11 @@ hermes -p <scout> chat --skills <scout-skill> -q "Run one sweep now, following t
 hermes kanban --board <board> list       # watch cards appear + promote
 ```
 
-Expected flow: `intake → (dedup/score) → research lanes (parallel) → route →
-prep → propose` → **proposal DM** → you reply `approve <slug>` →
-`fulfill chain` → deliverable DM. Confirm the first post-gate card is `ready`
-(not `todo`).
+Intended flow: `intake → (dedup/score) → research lanes (parallel) → route →
+prep → propose` → **proposal in Discord #briefs** → you reply `approve <slug>` →
+`fulfill chain` → deliverable in the configured target. A successful deployment
+must additionally prove the model-applied pre-gate/root/reply hooks described at
+the top of this runbook. Confirm the first post-gate card is `ready` (not `todo`).
 
 ## 14. Go live
 
@@ -292,12 +311,14 @@ their respective gateways being up.
 
 ## Day-to-day
 
-- **Watch:** `hermes kanban --board <board> list`. Progress also appears in
-  Discord `#briefs` through the default gateway.
+- **Watch:** `hermes kanban --board <board> list`. Proposals and final deliveries
+  appear in Discord `#briefs` only when the orchestrator actually calls
+  `hermes send`; board status changes alone are silent.
 - **Decide:** reply (no slash) `approve <slug>` / `shelve <slug>: reason` /
   `modify <slug>: change`; `reject the rest` (or `python proposal_actions.py
   shelve-all`) clears the queue.
-- **Cost:** `python scripts/cost_report.py <slug> --gate <usd>`.
+- **Cost:** `python scripts/cost_report.py <slug> --gate <usd>` is a manual
+  report; no automatic pause/notification hook is wired.
 - **Inspect cron attempts:**
   `hermes -p <scout> cron runs <job-id>` (or `hermes cron runs --limit 50`
   across profiles).

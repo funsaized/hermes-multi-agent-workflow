@@ -11,19 +11,23 @@ your adapted version.
   reads → classic prompt-injection surface. Don't let scout output drive
   privileged actions without the gate and the scope rails in between.
 - **The build path** can have an agent write and run code. The **scope rails**
-  (`paths/rails/*.md`) are the boundary on what it may build. Keep them tight and
-  specific; an empty or vague rails file is an open door.
+  (`paths/rails/*.md`) are prompt-level policy inlined into task bodies, not a
+  sandbox or enforcement boundary. Keep them tight and pair them with real tool,
+  credential, filesystem, and publishing restrictions.
 - **Shell + delivery.** The orchestrator runs shell commands and sends messages
   to the human. Restrict the profiles' toolsets to what each role needs.
-- **One human gate.** It exists to bound cost and to keep a person between research
-  and fulfillment. **Never make it auto-approve.**
+- **One human gate.** It keeps a person between research and fulfillment. It does
+  not by itself enforce the configured cost threshold. **Never make it
+  auto-approve.**
 
-## Scope rails are the safety mechanism
+## Scope rails are one safety input
 
-The single most important security control here is the per-path rails file. Good
+The per-path rails file is the model-visible policy for a fulfillment path. Good
 rails enumerate *acceptable* targets and an explicit *never* list (see the
 shipped `paths/rails/build.md`). When a proposal doesn't fit, the rule is
-**shelve or re-route — never widen the rails to fit.**
+**shelve or re-route — never widen the rails to fit.** Rails do not technically
+prevent a model or process from exceeding them; least-privilege tools and the
+human gate remain necessary.
 
 ## Secrets: what must NEVER be committed
 
@@ -60,5 +64,8 @@ Use `.env.example` (committed, no values) to document required variables.
 - Give each profile the **minimum toolset** for its role. Only the configured
   gateway needs Discord; scouts need web + `kanban`; workers need only what they build
   with.
-- Keep the **cost gate** on; it's a spend circuit-breaker, not just telemetry.
-- Prefer **read-only** scouting. The detection half should never mutate anything.
+- Treat `cost_gate_usd` as documentation until you wire
+  `scripts/cost_report.py` into orchestration; it is not currently a circuit
+  breaker.
+- Keep source access read-only where possible. Scouts still intentionally write
+  one local report and one intake card per run.

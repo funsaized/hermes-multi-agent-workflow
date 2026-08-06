@@ -1,4 +1,4 @@
-"""TriageEngine — the one entrypoint for every DETERMINISTIC pipeline step.
+"""Deterministic calculations and task-spec generation for the triage pipeline.
 
 Design principle: **fat engine, thin skill.** Everything that can be computed
 deterministically lives here in Python (testable, version-controlled). The
@@ -9,12 +9,12 @@ to the few steps that genuinely need a model's JUDGMENT:
     - producing the research classification
     - writing the proposal prose
 
-Everything else — dedup lookup, applying the scoring threshold, route resolution,
-building the research fan-out, building the prep and post-gate chains, picking
-workspaces — is a method here. The skill calls these; it does not re-implement
-them in prose.
+This module owns dedup lookup, score validation, route resolution, research-lane
+spec generation, ordered prep/fulfillment spec generation, and workspace choice.
+It does not create the pre-gate route card or apply/link prep specs on the board;
+those orchestration edges still live in the caller.
 
-This module returns plain dict "task specs" (title/body/role/parents/workspace)
+This module returns plain dataclass task specs (title/body/role/parents/workspace)
 rather than touching the board itself, so it is unit-testable without a live DB.
 `proposal_actions.py` and the orchestrator turn specs into real cards via
 `KanbanStore.create_task`. See `docs/01-architecture.md`.
@@ -39,7 +39,7 @@ from .scoring import (
 
 @dataclass
 class TaskSpec:
-    """A board card the engine wants created. Caller links/creates these in order."""
+    """A requested board card; the caller creates it and applies missing edges."""
     title: str
     body: str
     role: str                              # abstract role; map via config.role_to_profile()
@@ -59,9 +59,9 @@ class TriageEngine:
     # ----- paths / locations ----- #
 
     def _default_vault_dir(self) -> Path:
-        # Items live under the engine's working area by default; override by
-        # passing a vault. Production typically points this at the orchestrator
-        # profile's vault (see docs/05-pipeline-stages.md).
+        # Relative workspace roots resolve from the process cwd. Runtime callers
+        # are expected to run from hermes.project_root; pass a vault explicitly
+        # when a different location is required.
         return Path(self.config.workspace_root).resolve() / "vault" / "items"
 
     def workspace_for(self, path_name: str, slug: str) -> Path:
@@ -97,8 +97,9 @@ class TriageEngine:
     def research_specs(self, slug: str, triage_task_id: str) -> list[TaskSpec]:
         """Parallel research lanes, all parented to the triage task.
 
-        They run concurrently; the route step (below) is parented to ALL of them,
-        so the kernel fires route the instant the last lane finishes (fan-in).
+        The caller must create the lane cards, complete/release their parent, and
+        separately create a route card parented to every lane. This method does
+        not construct that fan-in card or define root-task completion semantics.
         """
         role = self.config.research.profile_role
         specs: list[TaskSpec] = []
@@ -130,19 +131,20 @@ class TriageEngine:
     # ----- stages 6-7: pre-gate prep chain ----- #
 
     def prep_specs(self, slug: str, path_name: str) -> list[TaskSpec]:
-        """Pre-gate prep stages for a path, chained so each waits on the previous."""
+        """Return ordered pre-gate prep specs; the caller must link them in order."""
         path = self.config.get_path(path_name)
         return self._chain(path.prep, slug, path_name, phase="prep", persistent=False)
 
     # ----- stages 9-11: post-gate fulfillment chain ----- #
 
     def fulfillment_specs(self, slug: str, path_name: str) -> list[TaskSpec]:
-        """Post-approval fulfillment chain in a SHARED PERSISTENT workspace.
+        """Return ordered post-approval specs in a shared persistent workspace.
 
         Every stage runs with workspace_kind="dir" pointed at the same per-item
         dir so artifacts (built code, slides, reports) survive between stages and
         the final delivery step can find them. Using scratch here strands the
-        final step — this is a known, expensive footgun (see docs/05).
+        final step — this is a known, expensive footgun (see docs/05). The caller
+        is responsible for creating the cards and linking each to its predecessor.
         """
         path = self.config.get_path(path_name)
         return self._chain(path.fulfill, slug, path_name, phase="fulfill", persistent=True)
@@ -170,8 +172,8 @@ class TriageEngine:
                 title=f"{stage.stage}: {slug}",
                 body=body,
                 role=stage.role,
-                # First stage has no parent inside this chain (caller decides whether
-                # it's `ready` now or parented to the gate); rest chain off previous.
+                # Specs carry no intra-chain ids because cards do not exist yet.
+                # The applying caller links each later card to its predecessor.
                 parents=[],
                 workspace_kind=ws_kind,
                 workspace_path=ws_path,
@@ -181,12 +183,12 @@ class TriageEngine:
     def _injected_constraints(self, path) -> str:
         """Inline the path's scope-rails / deliverable-spec files so workers see them.
 
-        Paths in triage.yaml point at markdown files (relative to the repo root).
-        We inline their contents into the task body so the worker — which may run
-        in an isolated workspace — always has the constraints in front of it.
+        Relative paths are resolved from the process cwd, which runtime commands
+        are expected to set to hermes.project_root. We inline their contents into
+        the task body so an isolated worker still sees the constraints.
         """
         out = []
-        for label, rel in (("SCOPE RAILS (hard limits)", path.scope_rails),
+        for label, rel in (("SCOPE RAILS (model-visible policy)", path.scope_rails),
                            ("DELIVERABLE SPEC (output format)", path.deliverable_spec)):
             if not rel:
                 continue

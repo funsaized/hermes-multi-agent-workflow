@@ -22,8 +22,8 @@ These map 1:1 to `triage.yaml` blocks: sources, rubric, route, paths, gate.
 Edit in this order; run `python -m cli.triage validate` after each block.
 
 1. **`name`, `board`, `workspace_root`, `cost_gate_usd`** — basic identity.
-2. **`sources`** — one entry per scout. Set `profile`, `skill` (you'll create
-   these in Step 4), `schedule`, and a precise `query`.
+2. **`sources`** — one entry per scout. Set `profile`, the desired rendered
+   `skill` name, `schedule`, and a precise `query`.
 3. **`item_schema.fields`** — the fields scouts emit. Keep `title`, `claim`,
    `sources`; add domain fields your rubric/router need.
 4. **`rubric`** — your dimensions, maxes, and threshold. Make the `hint`s concrete;
@@ -35,15 +35,16 @@ Edit in this order; run `python -m cli.triage validate` after each block.
    workspace bucket, and (where relevant) `scope_rails` / `deliverable_spec`.
    Mark dead-end outcomes `auto: true`.
 8. **`roles`** — map every role you used to a real profile name.
-9. **`gate`** — reply verbs.
+9. **`gate`** — channel, exact delivery target, and reply verbs.
 
 ## Step 2 — Rewrite the path templates (`paths/`)
 
-These markdown files are **inlined into worker task bodies** at runtime, so they
-are how you control quality without editing code.
+Rails and deliverable specs are **inlined into worker task bodies** at runtime;
+proposal templates are read by the orchestrator when it drafts the gate message.
+Together they control policy and quality without editing Python.
 
-- `paths/rails/*.md` — **hard limits** for any "build/do work" path. Be strict;
-  this is the safety boundary (docs/06).
+- `paths/rails/*.md` — **model-visible policy** for any "build/do work" path. Be
+  strict, but do not mistake prompt text for a sandbox (docs/06).
 - `paths/specs/*.md` — **output format** for any "produce an artifact" path
   (structure, style, quality bar). Point at a reference example if you have one.
 - `paths/proposals/*.md` — the **gate message** for each path. Keep skimmable.
@@ -64,9 +65,10 @@ set in `triage.yaml`.
 
 ## Step 4 — Rewrite the skills (`skills/templates/`)
 
-- **Scout(s):** copy `triage-scout/SKILL.md` once per source, name each to match
-  `sources[].skill`, and paste that source's `query` into "What to look for."
-  Keep the report format in sync with `item_schema` and `intake_parser.py`.
+- **Scout(s):** maintain the one shared `triage-scout/SKILL.md` template.
+  `render-skills` creates one profile-specific skill per source using
+  `sources[].skill`, `sources[].query`, profile, board, and intake path. Keep its
+  fixed report format in sync with `item_schema` and `intake_parser.py`.
 - **Orchestrator:** `triage-orchestrator/SKILL.md` is already thin and
   config-driven. Adjust only the domain-flavored wording (what to dedup on, how to
   phrase proposals). Don't move deterministic logic back into it.
@@ -84,8 +86,9 @@ case per classification value. Copy the patterns in `tests/test_engine_core.py`.
 ## Step 6 — Stand it up
 
 The Hermes 0.20 deployment flow is `validate → preflight → scaffold →
-render-skills → manual install`. None of these mutates your live Hermes home
-except the final reviewed-copy or future profile-distribution install step:
+render-skills → manually apply the plan and install skills`. The four CLI
+commands below do not mutate live Hermes state; executing commands printed by
+`scaffold` and copying rendered skills are the mutating steps:
 
 ```bash
 python -m cli.triage validate            # config consistent?
@@ -98,8 +101,8 @@ python -m unittest discover -s tests     # full suite, all green
 After `render-skills` prints its destinations, copy each rendered `SKILL.md` to
 the exact target it prints. The base profile uses `$HERMES_HOME/skills/...`;
 cloned profiles use `$HERMES_HOME/profiles/<profile>/skills/...`. You can instead
-package the rendered profile tree as a Hermes profile
-distribution). Automatic `python -m cli.triage install` is still a stub — do
+package the rendered profile tree as a Hermes profile distribution. Automatic
+`python -m cli.triage install` is still a stub — do
 not invoke it on a live Hermes home. See `docs/07-runbook.md` for the full
 profile-local cron, scout-gateway, dispatcher-on-configured-gateway flow, and
 the troubleshooting checklist.

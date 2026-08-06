@@ -1,6 +1,6 @@
 # Hermes Multi-Agent Workflow
 
-A reusable skeleton for an **autonomous, multi-agent triage pipeline** built on
+A reusable skeleton for an intended **autonomous, multi-agent triage pipeline** built on
 [Hermes](https://github.com/NousResearch/hermes-agent): a fleet of agents that
 **detects** items from sources, **dedups** them, **scores** them against a rubric,
 **researches** them in parallel, **routes** each to a fulfillment path, pauses at
@@ -15,6 +15,8 @@ then repoint it at your own domain.
 > its config out of the box, but going live requires setting up your Hermes
 > install, profiles, auth, and scouts (see `docs/07-runbook.md`). The point is to
 > give you — and your coding agent — a clear, working structure to adapt.
+> The post-gate handler is concrete; pre-gate board application and inbound reply
+> correlation still rely on the orchestrator skill and are not end-to-end wired.
 
 ## The idea
 
@@ -55,7 +57,7 @@ python -m cli.triage preflight           # read-only capability/resource check
 python -m cli.triage render-skills       # render profile-specific SKILL.md files
 ```
 
-The CLI exposes five surfaces; four are runnable now, one is a stub:
+The CLI exposes six surfaces; four are implemented and two are stubs:
 
 | Subcommand        | Mutates Hermes? | Purpose |
 |-------------------|-----------------|---------|
@@ -63,6 +65,7 @@ The CLI exposes five surfaces; four are runnable now, one is a stub:
 | `preflight`       | No              | Confirms the installed Hermes version/flags exist and which configured resources are already present. Exits 1 on blockers. |
 | `scaffold`        | No (dry run)    | Renders the deployment plan (shell or JSON) without executing it. Runs read-only preflight by default; use `--no-preflight` for offline rendering. |
 | `render-skills`   | Writes local staging only | Renders `work/scaffold/profiles/<profile>/skills/<skill>/SKILL.md` and prints the exact live destination. The base profile uses `$HERMES_HOME/skills/...`; cloned profiles use `$HERMES_HOME/profiles/...`. |
+| `init`            | No (stub)       | Prints guidance only; it does not initialize a project. |
 | `install`         | No (stub)       | Still a stub. Auto-apply of the scaffold plan is intentionally deferred. |
 
 `scaffold` prints commands; `preflight` verifies the runtime; `render-skills`
@@ -77,11 +80,12 @@ at. Hand your coding agent **`AGENTS.md`** and ask it to walk you through
 
 1. Edit `triage.yaml`: sources, rubric, research lanes, route map, paths, roles.
 2. Edit `paths/` templates (scope rails, deliverable specs, proposal formats).
-3. Edit `skills/templates/` (scout queries + orchestrator notes).
+3. Edit `sources[].query` and the shared skill templates. `render-skills`
+   generates one named scout skill per source.
 4. `python -m cli.triage validate`, keep `tests/` green.
-5. Follow `docs/07-runbook.md` for the Hermes 0.20 setup flow (profile-local cron,
-   scout gateways, dispatcher in the configured gateway only, reviewed local skill
-   copy or future profile distribution). `install` is still a stub.
+5. Follow `docs/07-runbook.md` for the Hermes 0.20 setup flow (profile-local cron
+   scheduler gateways without Discord, one configured messaging gateway/dispatcher,
+   and reviewed local skill copies). `install` is still a stub.
 
 ## Repository layout
 
@@ -93,10 +97,10 @@ engine/                  Generic engine (rarely edited)
   scaffold.py            Pure ordered deployment planner + safe shell/JSON rendering
   hermes_preflight.py    Read-only capability + resource check (injectable runner)
   skill_materialization.py Deterministic profile-specific SKILL.md renderer
-  engine.py              TriageEngine — all deterministic step logic
+  engine.py              TriageEngine — deterministic calculations + task specs
   scoring.py             Rubric scoring (LLM mode + deterministic mode)
   routing.py             Classification → path
-  dedup.py               Similarity (token-cosine; embedding-ready)
+  dedup.py               Similarity (token-cosine; embedding backend is TODO)
   item_vault.py          One markdown file per tracked item
   kanban_store.py        Writes the Hermes Kanban board
   intake_parser.py       Parses scout reports
@@ -106,7 +110,7 @@ paths/                   Per-path templates you customize
   rails/   specs/   proposals/
 skills/templates/        Scout + orchestrator SKILL.md templates
 cli/triage.py            validate / scaffold / preflight / render-skills / install-stub
-scripts/cost_report.py   Per-item spend for the cost gate
+scripts/cost_report.py   Standalone per-item spend report (not automatically enforced)
 scripts/rehearse_scaffold.py  Opt-in disposable-Home rehearsal (env-flag gated)
 tests/                   Generic engine + planner + preflight + render + CLI-contract tests
 docs/                    Deep-dive docs (architecture, board, config, adapting, …)

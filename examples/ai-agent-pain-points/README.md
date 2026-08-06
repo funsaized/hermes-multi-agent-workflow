@@ -1,10 +1,9 @@
-# Example: ai-agent-pain-points (the reference instance)
+# Example: ai-agent-pain-points (historical reference)
 
-This is the worked example the template ships configured for, and the system it
-was extracted from. **The live copy is the repo-root `triage.yaml`** — read that
-file top to bottom; it is heavily annotated and is the canonical reference for
-every config block. For a full architectural write-up of the origin system, see
-**`REFERENCE.md`** in this folder.
+This folder preserves historical reference material for the design the template
+was extracted from. It is not a second config or a current deployment contract.
+The only active config is repo-root `triage.yaml`; it may evolve away from this
+snapshot. For the origin-system write-up, see **`REFERENCE.md`**.
 
 ## What it does
 
@@ -20,17 +19,16 @@ every config block. For a full architectural write-up of the origin system, see
 - **Fulfill:** build path → prototype → test → report; video path → slides →
   script → deliver.
 
-## Reference skill (a real, filled-in scout)
+## Reference skill (historical snapshot)
 
-`reference-skills/pain-point-scout-x/SKILL.md` is the **actual** X/Grok scout from
-the live system, included verbatim (lightly sanitized). Read it alongside the
-generic `skills/templates/triage-scout/SKILL.md` to see exactly how a template
-gets filled in for a real source — the search query, the report format, and the
-`kanban_create` call that maps back to `triage.yaml`.
+`reference-skills/pain-point-scout-x/SKILL.md` is an old concrete X/Grok scout
+retained for comparison. Its board, profile, and vault paths do not come from the
+current config, so do not install it as-is. Current source-specific skills are
+generated from `skills/templates/triage-scout/SKILL.md` by `render-skills`.
 
 ## Use it as a starting point
 
-Copy the root `triage.yaml`, then follow `docs/04-adapting-to-your-domain.md` to
+Edit root `triage.yaml`, then follow `docs/04-adapting-to-your-domain.md` to
 repoint it. The structure (sources → rubric → research → route → paths → gate)
 stays the same; you swap the content.
 

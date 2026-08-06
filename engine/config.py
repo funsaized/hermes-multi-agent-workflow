@@ -8,8 +8,9 @@ Adapting the template = editing `triage.yaml` (and the markdown templates it
 points at). You should not need to edit the engine to change your subject matter.
 
 Reads YAML via PyYAML. That's the engine's one third-party dependency; if it is
-missing this module raises a clear, actionable error. (Item *files* still use the
-stdlib frontmatter reader — only this config loader needs PyYAML.)
+missing this module raises a clear, actionable error. Skill materialization also
+uses PyYAML to validate rendered frontmatter; item files use the stdlib
+frontmatter reader.
 """
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ except ImportError as exc:  # pragma: no cover - environment guard
     raise ImportError(
         "triage.yaml is YAML; the config loader needs PyYAML.\n"
         "Install it:  pip install pyyaml\n"
-        "(Only the config loader needs it — item files use the stdlib reader.)"
+        "(Config and skill rendering need it; item files use the stdlib reader.)"
     ) from exc
 
 
@@ -54,7 +55,7 @@ class Source:
     id: str
     profile: str          # the Hermes profile this scout runs under
     skill: str            # the scout skill name installed on that profile
-    schedule: str         # cron expression (registered in the gateway profile's store)
+    schedule: str         # cron expression registered in this source profile's local store
     query: str            # what the scout searches for (the domain prompt)
 
 
@@ -89,7 +90,7 @@ class PathDef:
     propose_role: str = "orchestrator"                    # who drafts + sends the proposal
     proposal_template: str | None = None                  # markdown file under paths/
     workspace_subdir: str = ""                            # persistent dir bucket, e.g. "builds"
-    scope_rails: str | None = None                        # hard-constraints md injected into workers
+    scope_rails: str | None = None                        # prompt-policy md injected into workers
     deliverable_spec: str | None = None                   # output-format md injected into workers
     auto: bool = False                                    # True = terminal path (e.g. shelve), no work
 
@@ -109,7 +110,8 @@ class Route:
 
 @dataclass
 class Dedup:
-    method: str = "token-cosine"     # or "embedding"
+    # Reserved backend selector. TriageEngine currently always uses token cosine.
+    method: str = "token-cosine"
     duplicate_threshold: float = 0.62
     possible_threshold: float = 0.40
 

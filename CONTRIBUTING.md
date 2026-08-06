@@ -35,9 +35,10 @@ No build step; it's plain Python (3.10+) plus PyYAML.
 - New `examples/<domain>/` configs that show the engine fitting a different
   problem (GitHub issue triage, lead triage, support-ticket routing, …).
 - Docs improvements — clearer adaptation guidance, more gotchas.
-- An embedding-based dedup backend (the contract in `engine/dedup.py` is ready
-  for it).
-- A real `cli.triage scaffold`/`install` that drives a Hermes setup end to end.
+- An embedding-based dedup backend, including wiring `dedup.method` through
+  `TriageEngine` and defining storage/loading for existing embeddings.
+- A separately approved installer that applies the existing dry-run scaffold
+  plan end to end.
 
 ## Style
 

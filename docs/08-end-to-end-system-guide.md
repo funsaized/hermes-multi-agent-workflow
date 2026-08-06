@@ -1,4 +1,10 @@
-# 08 — End-to-end system guide and architectural assessment
+# 08 — Historical end-to-end system assessment
+
+> **Snapshot, not current documentation.** This assessment records an older
+> revision. Counts, line references, CLI capabilities, deployment topology, and
+> findings below intentionally describe that snapshot. For current behavior use
+> `README.md`, `docs/01-architecture.md` through `docs/07-runbook.md`, source, and
+> current tests. This file is an audit trail, not an operator guide.
 
 ## Executive verdict
 
@@ -14,7 +20,7 @@ durable task state, worker dispatch, and messaging.
 
 However, distinguish four maturity levels:
 
-| Level | Current state |
+| Level | State at the audited revision |
 |---|---|
 | Architecture template | Strong and well documented |
 | Generic task-spec engine | Implemented; config validates and 12 unit tests pass |

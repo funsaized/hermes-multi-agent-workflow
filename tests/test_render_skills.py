@@ -52,6 +52,8 @@ class SkillMaterializationTests(unittest.TestCase):
             self.assertIn("test-board", orchestrator_text)
             self.assertIn(str(project.resolve()), orchestrator_text)
             self.assertIn("hermes send --to discord:briefs", orchestrator_text)
+            self.assertIn("mark the\ntriage root `done`", orchestrator_text)
+            self.assertIn("parent each card after the first to its predecessor", orchestrator_text)
             self.assertNotIn("TODO", orchestrator_text)
             self.assertNotIn("{{", orchestrator_text)
 
