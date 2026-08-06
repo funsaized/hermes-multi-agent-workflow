@@ -1,138 +1,325 @@
-# 07 — Runbook (stand it up + go live)
+# 07 — Runbook (stand it up + go live on Hermes 0.20)
 
-This template validates and unit-tests out of the box, but running it for real
-needs a Hermes install with profiles, auth, and scouts. This is the setup
-sequence. `python -m cli.triage scaffold` prints these commands tailored to your
-`triage.yaml`.
+This template validates, unit-tests, and renders a deployment plan out of the
+box, but going live is still a human-driven sequence of Hermes 0.20 commands.
+The engine produces typed metadata, validates it, runs a read-only preflight
+against your installed Hermes, renders a dry-run plan, and writes local copies
+of profile-specific skills. **The engine itself never mutates your live Hermes
+home** — `python -m cli.triage install` is intentionally a stub.
 
-> Commands assume the `hermes` CLI and your per-profile wrappers are on PATH. On
-> WSL, run them in your Linux shell (Hermes runs in WSL, even if the repo lives on
-> a Windows drive).
+The split:
+
+| Surface                     | What it does                                            | Mutates Hermes? |
+|-----------------------------|---------------------------------------------------------|-----------------|
+| `validate`                  | Checks `triage.yaml` consistency.                       | No              |
+| `preflight`                 | Confirms the installed Hermes runtime + configured resources are ready. Exits 1 on blockers. | No |
+| `scaffold`                  | Dry-run deployment plan (shell or JSON).                | No              |
+| `render-skills`             | Writes profile-specific `SKILL.md` files under `work/scaffold/profiles/...` and prints the exact `$HERMES_HOME/profiles/...` destination for each. | No |
+| `install`                   | Stub. Not implemented; deferred.                       | No              |
+
+You execute the scaffolded commands and the manual install yourself.
+
+> Commands assume `hermes` is on `PATH`. Hermes 0.20 uses
+> `hermes -p <profile>` to target a profile; aliases are optional convenience
+> only. On WSL, run them in your Linux shell.
 
 ## 1. Prerequisites
 
-- Hermes installed and working (`hermes --version`).
+- Hermes `>=0.20.0` installed (`hermes --version`).
 - `pip install -r requirements.txt` in this repo (PyYAML).
 - `python -m cli.triage validate` is clean.
+- (Recommended) `python -m cli.triage preflight --format json` exits 0 with no
+  capability blockers in your Hermes home. Resource blockers are expected
+  before you apply the scaffold.
 
-## 2. Create the board
-
-```bash
-hermes kanban boards create <board>     # the `board:` from triage.yaml
-```
-
-## 3. Create the profiles
-
-One profile per distinct value in `roles:` plus each `sources[].profile`. Clone
-from a base profile, then set the model in each profile's `config.yaml`.
+## 2. Inspect the deployment plan
 
 ```bash
-hermes profile create <name> --from <base>
-# edit ~/.hermes/profiles/<name>/config.yaml → model: block (provider + model)
+python -m cli.triage scaffold --format shell    # review before executing
+python -m cli.triage scaffold --format json     # machine-readable plan
+python -m cli.triage scaffold --no-preflight    # offline/pure-plan rendering
 ```
 
-Multi-model is fine: e.g. one scout on one provider, the rest on another. The
-profile is where the model is bound; the engine doesn't care.
+The plan is a fixed sequence of phases: runtime preflight → board → profiles
+→ profile working directories → toolsets → skills → model/auth checkpoints
+→ cron → gateways → smoke verification. It uses `--clone-from` (not `--from`),
+`hermes -p <profile>` for every profile-scoped step, absolute `--workdir` on
+every cron job, and emits both CLI toolset commands and cron-surface toolset
+commands for cron owners. The opening runtime checkpoint gates execution of
+those commands on preflight capability checks. Skill installation and
+model/auth remain `CHECKPOINT:` comments (or `argv: null` in JSON), not
+invented commands.
 
-## 4. Scout profiles need the `kanban` toolset
+By default, `scaffold` first performs the same read-only live inspection as
+`preflight` and reports blockers to stderr while still rendering the plan. Use
+`--no-preflight` in CI, offline environments, or whenever you only need the
+pure configuration-derived plan; it does not weaken the checkpoint that must
+pass before a human executes the commands.
 
-Scouts run via cron (not the dispatcher), so kanban tools aren't auto-enabled.
-For each `sources[].profile`:
+Skill installation is NOT automated. The plan prints local staging paths
+(`work/scaffold/profiles/<profile>/skills/<skill>/SKILL.md`) and the exact
+`$HERMES_HOME/profiles/<profile>/skills/<skill>/SKILL.md` destination for
+each. The model/auth checkpoints are yours to perform.
 
-```yaml
-# ~/.hermes/profiles/<scout>/config.yaml
-toolsets: [hermes-cli, kanban]
-```
-
-Also ensure scouts have a web-search backend (a Tavily/Serper/Brave key in their
-`.env`, or the built-in `web` toolset) so they can actually search.
-
-## 5. Install the skills
-
-- Copy `skills/templates/triage-orchestrator/` to the orchestrator profile's
-  skills dir.
-- Copy `skills/templates/triage-scout/` once per source to that source's profile,
-  renamed to `sources[].skill`, with the source's `query` filled in.
-
-## 6. Auth
-
-Log in each profile's provider once (interactive, human-run). OAuth token stores
-are **per profile** — logging in one profile doesn't cover another.
-
-## 7. Configure the gate channel
-
-For Telegram: set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USERS=<your id>`, and a
-home channel/thread in the orchestrator profile's `.env`. Message the bot once
-(bots can't DM a user who hasn't started them). Verify delivery:
+## 3. Create the board
 
 ```bash
-orchestrator send --to telegram "triage engine: delivery check"
+hermes kanban boards create <board> \
+    --name <display-name> \
+    --description '<board purpose>' \
+    --default-workdir <abs-path-to-this-repo>
 ```
 
-## 8. Register the scout crons — in the GATEWAY profile's store
+The `--default-workdir` is what `kanban` will suggest as the worker workspace.
+Setting it to the repo root keeps workers close to `triage.yaml` and
+`engine/`. `--clone-from` does not apply here.
 
-The gateway's cron ticker reads **only the gateway profile's** cron store. Run the
-gateway under the orchestrator and register the scout jobs there with a run-under
-profile (don't create them under the scout profiles' own stores — they'd list but
-never fire).
+## 4. Create the profiles
+
+One profile per distinct value in `roles:` plus each `sources[].profile`. The
+scaffold emits one `hermes profile create <name> --clone-from <base>
+--no-alias --description '<from triage.yaml>'` per profile. `--no-alias` keeps
+rehearsals inside their temporary home; remove it on your real machine if you
+want per-profile wrapper scripts (`orchestrator`, `xresearch`, …) on PATH.
 
 ```bash
-orchestrator cron create '<schedule>' --profile <scout-profile> --skill <scout-skill>
-# (confirm exact flags for your Hermes version)
-orchestrator cron list --all          # both jobs present
-orchestrator cron pause <id>          # keep paused until you go live
+hermes profile create <name> --clone-from <base> \
+    --no-alias \
+    --description '<from triage.yaml>'
 ```
 
-## 9. Start the runtime
+Each profile's description MUST match `hermes.profiles.<name>.description`
+exactly — `preflight` checks it through `profile describe` and fails the run
+if the configured description drifts. Multi-model is fine: a scout can use
+one provider, the orchestrator another. The profile is where the model is
+bound; the engine doesn't care.
 
-The dispatcher + cron live inside the gateway. On WSL use foreground `run` (the
-`start` subcommand wants an installed systemd service WSL often lacks). Keep it in
-tmux/screen.
+## 5. Pin each profile's working directory
+
+`tools enable` and `cron create` both accept `--workdir`, but per-profile
+default state lives in the profile config. The scaffold emits:
 
 ```bash
-orchestrator gateway run               # foreground; dispatcher covers all boards
-orchestrator gateway status            # → running (from another shell)
+hermes -p <profile> config set terminal.cwd <abs-path-to-this-repo>
 ```
 
-## 10. Smoke-test one cycle (before autonomous cron)
+Use `hermes -p <profile> config get terminal.cwd` to verify.
 
-Trigger a scout by hand so you don't wait for the cron tick:
+## 6. Enable toolsets (CLI and cron surfaces)
+
+Tools are bound to **execution surfaces**, not profiles. A cron-run scout
+agent runs on the `cron` platform; an interactive scout runs on `cli`.
+Enable the configured toolsets on both platforms for any profile that needs
+them.
+
+The scaffold reads `hermes.profiles.<name>.toolsets` from `triage.yaml` and
+emits:
 
 ```bash
-<scout-profile> chat --skills <scout-skill> -q "Run one sweep now, following the skill exactly."
-hermes kanban --board <board> list     # watch cards appear + promote
+hermes -p <profile> tools enable <tool> [<tool> ...] --platform cli
+# For cron-owning profiles, repeat on the cron surface:
+hermes -p <profile> tools enable <tool> [<tool> ...] --platform cron
+```
+
+`preflight` first checks that every configured name appears in the installed
+runtime's availability list, then checks whether each available name is enabled
+on every required surface. This catches unknown names even when `tools enable`
+silently no-ops. Always enable tools through `hermes tools enable` and
+write profile config through `hermes config set` — never reach into
+`~/.hermes/profiles/<profile>/config.yaml` by hand. Hand-written config drifts
+the next time the profile gets recreated.
+
+> The supported Hermes 0.20 contract names the cron platform `cron`. The
+> planner emits that reviewed command, but the opening checkpoint requires
+> `capability.cron-tool-surface` and `capability.toolset-names.cron` to pass
+> before you execute it. An older or forked runtime with a different surface
+> is unsupported until its configuration/planner contract is updated explicitly.
+
+## 7. Set dispatcher topology
+
+The orchestrator profile is the **sole** Kanban dispatcher. Every cron-owning
+scout profile has its own gateway only to tick its profile-local cron; it must
+not dispatch.
+
+The scaffold emits:
+
+```bash
+hermes -p <orchestrator> config set kanban.dispatch_in_gateway true
+hermes -p <scout> config set kanban.dispatch_in_gateway false
+```
+
+`preflight` checks the resulting `gateway list` and `cron status` outputs.
+
+## 8. Install the skills (manual, two supported paths)
+
+The scaffold does not write live profile directories. Choose ONE of:
+
+- **Reviewed local copy.** `python -m cli.triage render-skills` writes
+  `work/scaffold/profiles/<profile>/skills/<skill>/SKILL.md` and prints the
+  matching `$HERMES_HOME/profiles/<profile>/skills/<skill>/SKILL.md` for each
+  rendered file. Review the local file, then copy it to the printed live
+  destination yourself.
+- **Profile distribution.** Package the rendered profile tree as a Hermes
+  profile distribution and install it once `hermes profile install <local>`
+  is supported by your target runtime. This is the path of least
+  per-profile toil but is not implemented in this template yet.
+
+Either way, automatic `hermes profile install` is intentionally deferred. Do
+not script it.
+
+## 9. Model + provider auth (manual checkpoints)
+
+The scaffold emits one `CHECKPOINT:` per profile for model/provider selection
+and provider authentication. Per-profile auth is **not** shared: logging into
+`openrouter` on `orchestrator` does not cover `xresearch`. Use each profile's
+interactive login flow (or `hermes profile show` to inspect the resolved
+config) and never commit credentials. The planner does not invent provider
+commands; it surfaces the requirement and stops.
+
+> Web-search keys and similar `.env` values belong in each profile's `.env`.
+> They are part of the auth checkpoint, not the toolset. The repo's
+> `.gitignore` excludes `.env`.
+
+## 10. Configure the gate channel
+
+The gate channel is owned by the orchestrator profile. For Telegram, set the
+bot token and allowed-user list in `~/.hermes/profiles/<orchestrator>/.env`
+(not in this repository) and run the orchestrator gateway. Verify delivery:
+
+```bash
+hermes -p <orchestrator> gateway run --foreground     # logs live
+hermes -p <orchestrator> send --to telegram "delivery check"
+```
+
+If you use `--background`, route through systemd/launchd
+(`hermes -p <orchestrator> gateway install --start-now --start-on-login` on
+this profile). The first live run on a fresh home must DM the bot once so
+Telegram will deliver back.
+
+> ⚠️ **Approval boundary.** Every Telegram reply verb is a model-driven
+> interpretation of the human's text. The orchestrator skill must invoke
+> `proposal_actions.py {approve|shelve|shelve-all|modify}` deterministically.
+> Status fields do not notify anyone. `python -m cli.triage install` does
+> **not** send anything.
+
+## 11. Register the scout crons (profile-local)
+
+Hermes 0.20 cron is profile-local. Each cron-owning scout profile registers
+its own job and runs its own gateway so the scheduler ticks. The scaffold
+emits one `hermes -p <scout> cron create '<schedule>' '<prompt>' --name
+<job-name> --skill <skill> --workdir <abs> --deliver local` per source. The
+prompt is the source's `query` from `triage.yaml`.
+
+> **`--deliver local`** is intentional. Scout jobs create intake cards on
+> the board; their purpose is not to send you a cron response. `--deliver
+> local` keeps cron output out of Telegram/Discord. The orchestrator
+> gateway is what actually DMs you when proposals become ready.
+
+`--workdir` is required on every scout cron so AGENTS.md / CLAUDE.md /
+.cursorrules inject and the worker CWD is the repo. Use the absolute path
+to this repository.
+
+After creation:
+
+```bash
+hermes -p <scout> cron list --all        # both jobs present under the right profile
+hermes -p <scout> cron status            # scheduler running
+```
+
+`preflight --format json` confirms both for you.
+
+## 12. Start the gateways
+
+```bash
+hermes -p <orchestrator> gateway install --start-now --start-on-login
+hermes -p <scout>       gateway install --start-now --start-on-login  # once per cron-owning scout profile
+```
+
+Each cron-owning scout needs its own running gateway so its scheduler ticks
+and `hermes cron runs <job>` resolves a profile-local execution attempt.
+On WSL use `hermes -p <profile> gateway run --foreground` instead of
+`gateway install` if you lack systemd.
+
+Verify:
+
+```bash
+hermes gateway list                      # which profiles are active
+hermes -p <profile> gateway status       # per-profile service state
+hermes -p <scout>   cron status          # scheduler running
+```
+
+## 13. Smoke-test one cycle
+
+Run a scout manually before relying on the cron tick:
+
+```bash
+hermes -p <scout> chat --skills <scout-skill> -q "Run one sweep now, following the skill exactly."
+hermes kanban --board <board> list       # watch cards appear + promote
 ```
 
 Expected flow: `intake → (dedup/score) → research lanes (parallel) → route →
-prep → propose` → **proposal DM** → you reply `approve <slug>` → `fulfill chain`
-→ deliverable DM. Confirm the first post-gate card is `ready` (not `todo`).
+prep → propose` → **proposal DM** → you reply `approve <slug>` →
+`fulfill chain` → deliverable DM. Confirm the first post-gate card is `ready`
+(not `todo`).
 
-## 11. Go live
+## 14. Go live
 
 ```bash
-orchestrator cron resume <scout-id>    # start with one scout
+hermes -p <scout> cron resume <job-id>    # start with one scout
 # watch a real cycle, then resume the others
 ```
 
-The gateway must stay running for cron to fire and the board to dispatch.
+Keep all gateways running. Cron tick and Kanban dispatch both depend on
+their respective gateways being up.
 
 ## Day-to-day
 
-- **Watch:** `hermes kanban --board <board> list`. Progress also DMs to you.
+- **Watch:** `hermes kanban --board <board> list`. Progress also DMs to you
+  via the orchestrator gateway.
 - **Decide:** reply (no slash) `approve <slug>` / `shelve <slug>: reason` /
   `modify <slug>: change`; `reject the rest` (or `python proposal_actions.py
   shelve-all`) clears the queue.
 - **Cost:** `python scripts/cost_report.py <slug> --gate <usd>`.
-- **Stop:** Ctrl-C the gateway.
+- **Inspect cron attempts:**
+  `hermes -p <scout> cron runs <job-id>` (or `hermes cron runs --limit 50`
+  across profiles).
+- **Stop:** `Ctrl-C` the foreground gateway, or
+  `hermes -p <profile> gateway stop`.
+
+## Approval boundaries (publish / credentials)
+
+- **Never commit** `.env`, `auth.json`, board `*.db`, `work/`, `vault/`,
+  or anything under per-profile Hermes dirs. The repo's `.gitignore` covers
+  these; verify before any push.
+- **`install` is a stub.** It does not send messages, does not start
+  gateways, and does not register crons. Nothing here ships a model,
+  provider key, or Telegram token.
+- **No model/auth command is invented.** Every profile's provider and
+  gate-channel auth is a manual checkpoint surfaced by the scaffold.
+- **Cron owns nothing you didn't write.** `--deliver local` keeps scout
+  cron output silent; outbound delivery is the orchestrator's job and goes
+  through the human-gate path.
 
 ## Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
-| Scout runs, no card appears | Scout profile missing `kanban` toolset (step 4). |
-| Crons never fire | Jobs not in the gateway profile's store; recreate with `--profile` (step 8). |
+| `scaffold` emits a preflight blocker summary to stderr | Run `python -m cli.triage preflight --format json` for evidence. The plan still renders; review it before executing. |
+| Scout runs, no card appears | Scout profile missing a toolset on the `cron` platform. Run `hermes -p <scout> tools list --platform cron` and re-enable missing toolsets (`hermes tools enable … --platform cron`). See step 6. |
+| Crons never fire | The owning profile's gateway is not running. Run `hermes -p <scout> gateway status` and `hermes gateway list` to confirm. The job is registered under one profile; the scheduler must tick under that same profile. |
 | Card stuck in `todo` | It has an unfinished parent. Don't parent the first post-gate task to the triage card. |
 | Proposal status set but no DM | Orchestrator didn't `hermes send`; status ≠ delivery (docs/05). |
 | `/approve` "unknown command" | Telegram reserves `/`; reply without the slash. |
 | Final delivery can't find artifacts | A stage used scratch, not the persistent `dir` workspace. |
-| `gateway start` fails on WSL | Use `gateway run` (foreground). |
+| `gateway start` fails on WSL | Use `hermes -p <profile> gateway run` (foreground). |
+| `gateway install` is invasive on disposable rehearsal | Use `hermes -p <profile> gateway run --foreground` or run the rehearsal with `HERMES_RUN_DISPOSABLE_REHEARSAL=1 python -m unittest tests.integration.test_scaffold_disposable_home -v` (it sanitizes `HOME`/`HERMES_HOME`/`TMPDIR`, refuses mutation unless Hermes discovers an isolation sentinel, and cleans up automatically). |
+| Toolset name rejected by installed Hermes | Track upstream Hermes issue #64494 first; the template intentionally retains `kanban`/`coding` and preflight reports names absent from the installed availability set. If you deliberately choose a local compatibility override, change `hermes.profiles.<name>.toolsets` in `triage.yaml` to runtime-advertised names, document the divergence, and rerun validate/preflight. No silent rename is performed. |
+| `hermes cron runs <job>` returns empty | Job id wrong or job is paused. `hermes -p <scout> cron list --all` to find the right id. |
+| `hermes gateway list` empty | Gateways not installed yet (`hermes -p <profile> gateway install --start-now --start-on-login`), or you're in a temporary home without sentinel files. |
+
+> Every command above was checked against the installed Hermes 0.20.0 help
+> surface (`hermes <subcommand> --help`) and against the live preflight
+> capability checks. If your Hermes version drifts, the
+> `tests/test_hermes_cli_contract.py` opt-in test will catch a flag the
+> scaffold no longer supports — fix the planner or bump
+> `hermes.min_version`, do not patch the docs to invent a flag.

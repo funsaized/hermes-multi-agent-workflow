@@ -24,7 +24,7 @@ valuable.
 
 ```bash
 pip install -r requirements.txt
-python -m unittest discover -s tests     # 12 tests
+python -m unittest discover -s tests     # full suite
 python -m cli.triage validate
 ```
 
@@ -44,3 +44,28 @@ No build step; it's plain Python (3.10+) plus PyYAML.
 Match the surrounding code: typed dataclasses, clear docstrings aimed at the
 *adapting agent*, comments that explain *why*. Prefer stdlib; justify new
 dependencies.
+
+## Hermes CLI compatibility updates
+
+The deployment planner targets the minimum Hermes version declared at
+`hermes.min_version` in `triage.yaml`. When adopting a new Hermes release:
+
+1. Review the release's command help, then update generated argv and the minimum
+   version together. Do not change a command merely to match cosmetic help text.
+2. Run `python -m cli.triage validate` and both scaffold formats. The planner's
+   pure unit tests remain the authority for exact ordering and argv.
+3. Run `HERMES_RUN_CLI_CONTRACT=1 python -m unittest tests.test_hermes_cli_contract -v` with Hermes
+   installed. The live test checks every generated subcommand and long flag;
+   without Hermes it skips with an explicit reason.
+4. Render and review profile skills with `python -m cli.triage render-skills`.
+   Installation remains manual. Either copy each printed local `SKILL.md` to
+   its exact printed `$HERMES_HOME/profiles/<profile>/skills/<skill>/SKILL.md`
+   destination, or package the rendered profile tree as a Hermes profile
+   distribution. Automatic `hermes profile install` is intentionally deferred.
+5. Rehearse isolated state with
+   `HERMES_RUN_DISPOSABLE_REHEARSAL=1 python -m unittest tests.integration.test_scaffold_disposable_home -v`.
+   This uses temporary `HOME` and `HERMES_HOME`, refuses mutation unless Hermes
+   discovers an isolation sentinel, never starts gateways, and cleans up.
+6. Run the full suite and inspect the shell/JSON plan before changing any live
+   profile. `python -m cli.triage install` must remain a stub until profile
+   distributions and a separately approved installer are implemented.

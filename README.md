@@ -37,12 +37,32 @@ lives in one file, `triage.yaml`.
 
 ## Quickstart
 
+This template targets **Hermes `>=0.20.0`**. Validate and inspect it before
+touching any Hermes install:
+
 ```bash
 pip install -r requirements.txt          # just PyYAML
 python -m cli.triage validate            # check the example config
-python -m unittest discover -s tests     # 12 tests, all generic
-python -m cli.triage scaffold            # print the Hermes setup plan
+python -m unittest discover -s tests     # full suite (live Hermes checks are opt-in)
+python -m cli.triage scaffold            # dry-run Hermes setup plan
+python -m cli.triage scaffold --no-preflight  # offline/pure-plan rendering
+python -m cli.triage preflight           # read-only capability/resource check
+python -m cli.triage render-skills       # render profile-specific SKILL.md files
 ```
+
+The CLI exposes five surfaces; four are runnable now, one is a stub:
+
+| Subcommand        | Mutates Hermes? | Purpose |
+|-------------------|-----------------|---------|
+| `validate`        | No              | Checks `triage.yaml` consistency. |
+| `preflight`       | No              | Confirms the installed Hermes version/flags exist and which configured resources are already present. Exits 1 on blockers. |
+| `scaffold`        | No (dry run)    | Renders the deployment plan (shell or JSON) without executing it. Runs read-only preflight by default; use `--no-preflight` for offline rendering. |
+| `render-skills`   | Writes local staging only | Renders `work/scaffold/profiles/<profile>/skills/<skill>/SKILL.md` and prints the exact `$HERMES_HOME/profiles/...` destination for each reviewed-copy or future profile-distribution install. |
+| `install`         | No (stub)       | Still a stub. Auto-apply of the scaffold plan is intentionally deferred. |
+
+`scaffold` prints commands; `preflight` verifies the runtime; `render-skills`
+produces deterministic files you review and copy yourself. The full live runbook
+is in `docs/07-runbook.md`.
 
 ## Adapt it to your domain
 
@@ -54,7 +74,9 @@ at. Hand your coding agent **`AGENTS.md`** and ask it to walk you through
 2. Edit `paths/` templates (scope rails, deliverable specs, proposal formats).
 3. Edit `skills/templates/` (scout queries + orchestrator notes).
 4. `python -m cli.triage validate`, keep `tests/` green.
-5. Follow `docs/07-runbook.md` to set up profiles and go live.
+5. Follow `docs/07-runbook.md` for the Hermes 0.20 setup flow (profile-local cron,
+   scout gateways, dispatcher in the orchestrator only, reviewed local skill
+   copy or future profile distribution). `install` is still a stub.
 
 ## Repository layout
 
@@ -62,7 +84,10 @@ at. Hand your coding agent **`AGENTS.md`** and ask it to walk you through
 triage.yaml              THE config — your whole pipeline (start here)
 AGENTS.md                Guide for the AI agent adapting this template
 engine/                  Generic engine (rarely edited)
-  config.py              Loads + validates triage.yaml
+  config.py              Loads + validates triage.yaml (typed Hermes deployment metadata)
+  scaffold.py            Pure ordered deployment planner + safe shell/JSON rendering
+  hermes_preflight.py    Read-only capability + resource check (injectable runner)
+  skill_materialization.py Deterministic profile-specific SKILL.md renderer
   engine.py              TriageEngine — all deterministic step logic
   scoring.py             Rubric scoring (LLM mode + deterministic mode)
   routing.py             Classification → path
@@ -75,9 +100,10 @@ proposal_actions.py      Human-gate handler (approve/shelve/modify) — config-d
 paths/                   Per-path templates you customize
   rails/   specs/   proposals/
 skills/templates/        Scout + orchestrator SKILL.md templates
-cli/triage.py            validate / scaffold / init / install
+cli/triage.py            validate / scaffold / preflight / render-skills / install-stub
 scripts/cost_report.py   Per-item spend for the cost gate
-tests/                   Generic engine tests
+scripts/rehearse_scaffold.py  Opt-in disposable-Home rehearsal (env-flag gated)
+tests/                   Generic engine + planner + preflight + render + CLI-contract tests
 docs/                    Deep-dive docs (architecture, board, config, adapting, …)
 examples/                Reference configs
 ```

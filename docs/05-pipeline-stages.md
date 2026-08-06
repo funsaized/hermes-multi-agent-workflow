@@ -5,15 +5,31 @@ calling out the hard-won gotchas you must not regress.
 
 ## Stage 1 — Intake (scout)
 
-A scout (cron, on a source profile) searches its surface, writes a report to
-`${HERMES_PROFILE_DIR}/vault/intake/<ts>-<source>.md`, and creates one `intake`
-card assigned to the orchestrator. **Scouts only detect** — no dedup/score/route.
+A scout runs under its source profile's gateway on a schedule, writes a report
+to `<project_root>/work/vault/intake/<ts>-<source>.md`, and creates one `intake`
+card assigned to the orchestrator. The report path carried in the card body is
+authoritative if a deployment customizes `workspace_root`. **Scouts only
+detect** — no dedup/score/route.
 
 - Code: scout skill template; `engine/intake_parser.py` parses the report.
-- ⚠️ **Gotcha — kanban toolset.** Scouts run via cron, not the dispatcher, so
-  kanban tools are NOT auto-enabled (`HERMES_KANBAN_TASK` is unset). Each scout
-  profile must list `kanban` in `toolsets:` or it writes a report but silently
-  fails to create the intake task.
+- ⚠️ **Gotcha — profile-local cron, scout-local gateway.** On Hermes 0.20,
+  cron is owned by the profile that runs the scout, not by the orchestrator.
+  Each scout profile registers its own `hermes -p <scout> cron create …`
+  job and runs its own gateway so the cron scheduler ticks. The orchestrator
+  profile keeps Kanban dispatch enabled (`kanban.dispatch_in_gateway: true`).
+  Scout profiles disable it (`kanban.dispatch_in_gateway: false`) so they
+  only generate intake cards; the orchestrator gateway is the sole dispatcher.
+  `python -m cli.triage scaffold` renders all of this.
+- ⚠️ **Gotcha — toolsets on the right execution surface.** Tools are bound to
+  execution surfaces, not profiles. Cron-run scout agents use the `cron`
+  platform; interactive scouts use `cli`. Enable the same toolsets on both
+  platforms or the cron-run scout can write a report but silently fail to
+  create the intake task. The scaffold emits both
+  `hermes -p <scout> tools enable … --platform cli` and `--platform cron` for
+  cron-owning profiles. Execute the generated cron command only after preflight
+  confirms the cron surface and every configured toolset name is available.
+  The configured list lives in `hermes.profiles.<name>.toolsets` in
+  `triage.yaml`.
 
 ## Stage 2 — Dedup (orchestrator → engine)
 

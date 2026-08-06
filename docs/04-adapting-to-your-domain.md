@@ -83,9 +83,25 @@ case per classification value. Copy the patterns in `tests/test_engine_core.py`.
 
 ## Step 6 — Stand it up
 
-`python -m cli.triage scaffold` prints the Hermes commands to create the board,
-profiles, skills, and crons. Then follow `docs/07-runbook.md` to set models/auth,
-start the gateway, smoke-test one cycle, and go live.
+The Hermes 0.20 deployment flow is `validate → preflight → scaffold →
+render-skills → manual install`. None of these mutates your live Hermes home
+except the final reviewed-copy or future profile-distribution install step:
+
+```bash
+python -m cli.triage validate            # config consistent?
+python -m cli.triage preflight           # runtime + resources ready? (exits 1 on blockers)
+python -m cli.triage scaffold            # dry-run plan; review before executing
+python -m cli.triage render-skills       # writes local SKILL.md files + exact destinations
+python -m unittest discover -s tests     # full suite, all green
+```
+
+After `render-skills` prints its destinations, copy each rendered `SKILL.md` to
+its exact `$HERMES_HOME/profiles/<profile>/skills/<skill>/SKILL.md` target
+yourself (or package the rendered profile tree as a Hermes profile
+distribution). Automatic `python -m cli.triage install` is still a stub — do
+not invoke it on a live Hermes home. See `docs/07-runbook.md` for the full
+profile-local cron, scout-gateway, dispatcher-on-orchestrator-only flow, and
+the troubleshooting checklist.
 
 ## A worked mental model
 
