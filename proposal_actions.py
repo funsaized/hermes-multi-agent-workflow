@@ -10,9 +10,9 @@ edit this file to add or reorder stages — you edit the YAML.
     python proposal_actions.py shelve-all  [--except <slug>] [--reason "..."]
     python proposal_actions.py modify      <slug> --change "..."
 
-Reply syntax note (Telegram): the human replies with NO leading slash —
-`approve <slug>` — because Telegram intercepts `/commands`. The orchestrator maps
-the reply verbs (see `gate:` in triage.yaml) to these subcommands.
+Reply syntax note: the human replies with ordinary text such as `approve <slug>`.
+Do not use `/approve`; Hermes reserves that command for execution approval. The
+orchestrator maps the reply verbs (see `gate:` in triage.yaml) to these subcommands.
 
 Environment overrides:
     TRIAGE_CONFIG          path to triage.yaml          (default: ./triage.yaml)

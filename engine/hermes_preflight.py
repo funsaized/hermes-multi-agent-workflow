@@ -294,6 +294,8 @@ def run_preflight(cfg: TriageConfig, runner: CommandRunner | None = None) -> Pre
         exists = profiles_result.returncode == 0 and _has_token(profile_text, name)
         checks.append(_check(f"resource.profile.{name}", exists, f"Profile {name!r} exists.", f"Configured profile {name!r} is missing."))
 
+        if name == cfg.hermes.base_profile:
+            continue
         description_result = runner.run(("hermes", "profile", "describe", name))
         description_ok = description_result.returncode == 0 and profile.description.strip() == description_result.stdout.strip()
         checks.append(
@@ -343,6 +345,7 @@ def run_preflight(cfg: TriageConfig, runner: CommandRunner | None = None) -> Pre
         status = _output(result).lower()
         active = result.returncode == 0 and (
             "gateway service is active" in status
+            or "gateway is supervised by" in status
             or ("service" in status and "loaded" in status and "not loaded" not in status)
         )
         checks.append(_check(f"resource.gateway.{profile}", active, f"Gateway service for profile {profile!r} is active.", f"Gateway service for profile {profile!r} is missing or inactive."))
@@ -373,7 +376,13 @@ def run_preflight(cfg: TriageConfig, runner: CommandRunner | None = None) -> Pre
 
     gate_result = runner.run(("hermes", "-p", cfg.hermes.gateway_profile, "send", "--list", cfg.gate.channel))
     gate_text = _output(gate_result).lower()
-    gate_ok = gate_result.returncode == 0 and "no targets found" not in gate_text
-    checks.append(_check("resource.gate-channel", gate_ok, f"Gate channel {cfg.gate.channel!r} has an available delivery target.", f"Gate channel {cfg.gate.channel!r} has no available delivery target for profile {cfg.hermes.gateway_profile!r}."))
+    target = cfg.gate.target or cfg.gate.channel
+    target_locator = target.split(":", 1)[-1]
+    gate_ok = (
+        gate_result.returncode == 0
+        and "no targets found" not in gate_text
+        and (target.lower() in gate_text or _has_token(gate_text, target_locator.lower()))
+    )
+    checks.append(_check("resource.gate-channel", gate_ok, f"Gate target {target!r} is available.", f"Gate target {target!r} is unavailable for profile {cfg.hermes.gateway_profile!r}."))
 
     return PreflightReport.from_checks(tuple(checks), cfg.validation_warnings)

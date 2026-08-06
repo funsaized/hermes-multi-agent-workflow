@@ -168,7 +168,11 @@ def run_rehearsal(config: str | Path = "triage.yaml") -> RehearsalReport:
             template_root=Path(cfg.hermes.project_root) / "skills" / "templates",
         )
         for target in rendered:
-            destination = home / "hermes" / "profiles" / target.profile / "skills" / target.skill / "SKILL.md"
+            destination = (
+                home / "hermes" / "skills" / target.skill / "SKILL.md"
+                if target.profile == cfg.hermes.base_profile
+                else home / "hermes" / "profiles" / target.profile / "skills" / target.skill / "SKILL.md"
+            )
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(target.path, destination)
             if not destination.is_file():
@@ -185,6 +189,8 @@ def run_rehearsal(config: str | Path = "triage.yaml") -> RehearsalReport:
         for profile in cfg.hermes.profiles:
             if profile not in profile_listing:
                 raise RuntimeError(f"Disposable profile {profile!r} was not listed.")
+            if profile == cfg.hermes.base_profile:
+                continue
             cwd = _run(("hermes", "-p", profile, "config", "get", "terminal.cwd", "--json"), env)
             if cfg.hermes.project_root not in cwd:
                 raise RuntimeError(f"Profile {profile!r} has the wrong terminal.cwd: {cwd.strip()}")

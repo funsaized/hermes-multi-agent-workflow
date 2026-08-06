@@ -59,8 +59,8 @@ The deployment planner targets the minimum Hermes version declared at
    without Hermes it skips with an explicit reason.
 4. Render and review profile skills with `python -m cli.triage render-skills`.
    Installation remains manual. Either copy each printed local `SKILL.md` to
-   its exact printed `$HERMES_HOME/profiles/<profile>/skills/<skill>/SKILL.md`
-   destination, or package the rendered profile tree as a Hermes profile
+   its exact printed destination (`$HERMES_HOME/skills/...` for the base profile,
+   `$HERMES_HOME/profiles/<profile>/skills/...` for clones), or package the rendered profile tree as a Hermes profile
    distribution. Automatic `hermes profile install` is intentionally deferred.
 5. Rehearse isolated state with
    `HERMES_RUN_DISPOSABLE_REHEARSAL=1 python -m unittest tests.integration.test_scaffold_disposable_home -v`.

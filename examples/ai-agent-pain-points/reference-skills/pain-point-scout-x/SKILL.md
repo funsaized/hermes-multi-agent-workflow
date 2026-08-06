@@ -85,7 +85,7 @@ orchestrator's job.
      the scrape window, the candidate count, and a one-line summary per candidate.
    - No `parents` (so it is `ready` immediately and the dispatcher spawns the orchestrator).
 
-6. **Stop.** Do not create triage/research tasks. Do not post to Telegram. Complete your task.
+6. **Stop.** Do not create triage/research tasks. Do not post to Discord. Complete your task.
 
 ## Rules
 

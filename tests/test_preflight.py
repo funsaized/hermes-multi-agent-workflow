@@ -73,10 +73,18 @@ class FakeRunner:
                         for metadata in CONFIG.hermes.profiles.values()
                         for toolset in metadata.toolsets
                     })
+                    enabled = (
+                        set(CONFIG.hermes.profiles[profile].toolsets)
+                        if profile in CONFIG.hermes.profiles
+                        else set()
+                    )
                     return CommandResult(
                         0,
                         f"Built-in toolsets ({surface}):\n"
-                        + "\n".join(f"disabled {name}" for name in available),
+                        + "\n".join(
+                            f"{'enabled' if name in enabled else 'disabled'} {name}"
+                            for name in available
+                        ),
                         "",
                     )
                 enabled = CONFIG.hermes.profiles[profile].toolsets
@@ -87,7 +95,7 @@ class FakeRunner:
                     "",
                 )
             if command == ("gateway", "status"):
-                return CommandResult(0, "Gateway service is active and running", "")
+                return CommandResult(0, "Gateway is supervised by launchd (PID 7748)", "")
             if command == ("cron", "list", "--all"):
                 names = [
                     f"{CONFIG.name}-{source.id}-scout"
@@ -98,7 +106,7 @@ class FakeRunner:
             if command == ("cron", "status"):
                 return CommandResult(0, "Gateway is running; cron jobs will fire automatically", "")
             if command == ("send", "--list", CONFIG.gate.channel):
-                return CommandResult(0, f"Available target: {CONFIG.gate.channel}", "")
+                return CommandResult(0, "discord:briefs [1484142557704491119]", "")
         return CommandResult(2, "", "unsupported fake command")
 
 
@@ -118,7 +126,8 @@ class PreflightTests(unittest.TestCase):
         self.assertIn(("hermes", "-p", "default", "tools", "list", "--platform", "cron"), runner.calls)
         self.assertIn(("hermes", "-p", "webresearch", "cron", "list", "--all"), runner.calls)
         self.assertIn(("hermes", "-p", "webresearch", "cron", "status"), runner.calls)
-        self.assertIn(("hermes", "-p", "orchestrator", "send", "--list", "telegram"), runner.calls)
+        self.assertIn(("hermes", "-p", "default", "send", "--list", "discord"), runner.calls)
+        self.assertNotIn(("hermes", "profile", "describe", "default"), runner.calls)
         self.assertTrue(all(call[-1] == "--help" for call in runner.calls if "create" in call or "install" in call))
 
     def test_old_runtime_and_missing_resources_are_blockers(self):
@@ -128,7 +137,7 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(any("0.19.9" in error for error in report.errors))
         self.assertTrue(any("pain-point" in error for error in report.errors))
         self.assertTrue(any("triage-scout-x" in error for error in report.errors))
-        self.assertTrue(any("telegram" in error for error in report.errors))
+        self.assertTrue(any("discord:1484142557704491119" in error for error in report.errors))
 
     def test_missing_executable_short_circuits_safely(self):
         class MissingRunner:

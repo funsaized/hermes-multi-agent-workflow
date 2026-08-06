@@ -96,11 +96,12 @@ python -m unittest discover -s tests     # full suite, all green
 ```
 
 After `render-skills` prints its destinations, copy each rendered `SKILL.md` to
-its exact `$HERMES_HOME/profiles/<profile>/skills/<skill>/SKILL.md` target
-yourself (or package the rendered profile tree as a Hermes profile
+the exact target it prints. The base profile uses `$HERMES_HOME/skills/...`;
+cloned profiles use `$HERMES_HOME/profiles/<profile>/skills/...`. You can instead
+package the rendered profile tree as a Hermes profile
 distribution). Automatic `python -m cli.triage install` is still a stub — do
 not invoke it on a live Hermes home. See `docs/07-runbook.md` for the full
-profile-local cron, scout-gateway, dispatcher-on-orchestrator-only flow, and
+profile-local cron, scout-gateway, dispatcher-on-configured-gateway flow, and
 the troubleshooting checklist.
 
 ## A worked mental model

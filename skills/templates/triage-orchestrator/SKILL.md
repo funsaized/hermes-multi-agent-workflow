@@ -75,7 +75,7 @@ finishes, draft the proposal using the path's proposal template
 (`paths/proposals/<path>.md`), set item `status: awaiting_approval`, and **send it
 to the human** — you MUST actually deliver it:
 ```
-hermes send --to telegram --file <proposal.md>
+hermes send --to {{GATE_TARGET}} --file <proposal.md>
 ```
 Setting status is NOT delivery. (See docs/06 + the runbook.) Then move on to
 other items while waiting — the gate is non-blocking.
@@ -93,11 +93,11 @@ spawns the post-gate chain in a shared persistent workspace. You do nothing else
 
 ### 8. Deliver
 When the final fulfillment stage completes, DM the deliverable to the human
-(`hermes send --to telegram --file <deliverable>`).
+(`hermes send --to {{GATE_TARGET}} --file <deliverable>`).
 
 ## Rules
 
-- Narrate one line per decision to Telegram so the human has a pulse.
+- Narrate one line per decision to the configured gate target so the human has a pulse.
 - Never auto-approve. The gate is real.
 - Only YOU write vault item files and create child tasks. Workers don't fan out.
 - Be honest in scoring/classification — gaming them wastes the human's one tap

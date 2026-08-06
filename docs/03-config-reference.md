@@ -126,8 +126,9 @@ rename/merge profiles without touching paths.
 
 | Key | Meaning |
 |---|---|
-| `channel` | Where proposals go (e.g. `telegram`). |
-| `approve` / `shelve` / `modify` | Reply verbs the orchestrator maps to `proposal_actions.py` subcommands. **No leading slash** on Telegram. |
+| `channel` | Messaging platform used for proposals (for example, `discord`). |
+| `target` | Exact `hermes send --to` target (for example, `discord:1484142557704491119`). Must use the `channel` prefix. |
+| `approve` / `shelve` / `modify` | Ordinary-text reply verbs the orchestrator maps to `proposal_actions.py` subcommands. Do not use `/approve`; Hermes reserves it for execution approval. |
 
 ## Deployment flow (Hermes 0.20)
 
@@ -150,13 +151,15 @@ them in this order:
    blockers and prints evidence. Never reads credentials.
 3. `python -m cli.triage scaffold --format shell|json` — dry-run deployment
    plan. Pure planner (no subprocess, no Hermes mutations). Emits an ordered
-   sequence of `hermes -p <profile> profile create --clone-from …`,
+   sequence of `hermes profile create <profile> --clone-from …` for every profile
+   except the already-existing `base_profile`,
    `hermes -p <profile> config set terminal.cwd <abs>`,
    `hermes -p <profile> tools enable … --platform cli` plus `--platform cron`
    for cron-owning profiles, profile-local
    `cron create --workdir <abs> --deliver local`, and
-   `gateway install --start-now --start-on-login` for the orchestrator and
-   every cron-owning scout profile. Skill installation and model/auth are
+   `gateway install --start-now --start-on-login` for every new gateway profile.
+   When `gateway_profile == base_profile`, the existing root gateway is reused
+   and no competing gateway installation is emitted. Skill installation and model/auth are
    emitted as `CHECKPOINT:` comments (or `argv: null` in JSON), never as
    invented commands. `scaffold` runs `preflight` by default and writes a concise
    blocker summary to stderr while still rendering the full plan. Add
@@ -167,7 +170,8 @@ them in this order:
    rendered file it prints the exact
    `$HERMES_HOME/profiles/<profile>/skills/<skill>/SKILL.md` destination you
    must copy to manually, or the path of the rendered profile tree you would
-   package as a Hermes profile distribution. It never touches live Hermes
+   package as a Hermes profile distribution. Skills for the base profile target
+   `$HERMES_HOME/skills/<skill>/SKILL.md`. It never touches live Hermes
    state.
 5. `python -m cli.triage install` — still a stub. Automatic application of
    the scaffold plan is intentionally deferred. Do not invoke it on a live

@@ -98,6 +98,8 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
     )
 
     for name, profile in cfg.hermes.profiles.items():
+        if name == cfg.hermes.base_profile:
+            continue
         steps.append(
             CommandStep(
                 phase="profiles",
@@ -112,6 +114,8 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
             )
         )
     for name in cfg.hermes.profiles:
+        if name == cfg.hermes.base_profile:
+            continue
         steps.append(
             CommandStep(
                 phase="profile working directories",
@@ -193,7 +197,7 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
     steps.append(
         CommandStep(
             phase="cron",
-            description="Enable Kanban dispatch only on the orchestrator gateway.",
+            description="Enable Kanban dispatch only on the configured gateway profile.",
             argv=("hermes", "-p", gateway, "config", "set", "kanban.dispatch_in_gateway", "true"),
             profile=gateway,
         )
@@ -231,7 +235,7 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
             )
         )
 
-    gateway_profiles = [gateway]
+    gateway_profiles = [] if gateway == cfg.hermes.base_profile else [gateway]
     gateway_profiles.extend(name for name in cfg.hermes.profiles if name in cron_profiles and name != gateway)
     for name in gateway_profiles:
         steps.append(
@@ -249,7 +253,7 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
             description="Verify the deployed topology before relying on scheduled intake.",
             verification=(
                 f"Confirm exactly one Kanban dispatcher is active: profile {gateway!r}.",
-                "Confirm each cron-owning scout gateway is running and its profile-local cron is registered.",
+                "Confirm the configured gateway is already running, and each cron-owning scout gateway is running with its profile-local cron registered.",
                 f"Run one scout manually and verify it creates an intake task on board {cfg.board!r}.",
                 f"Verify the human gate can deliver through {cfg.gate.channel!r} and receive a non-slash reply.",
             ),

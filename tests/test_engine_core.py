@@ -49,7 +49,7 @@ def make_config(**overrides) -> TriageConfig:
             "shelve": {"auto": True},
         },
         "roles": {"orchestrator": "orchestrator", "researcher": "researcher", "analyst": "analyst", "builder": "builder"},
-        "gate": {"channel": "telegram", "approve": ["approve"], "shelve": ["shelve"], "modify": ["modify"]},
+        "gate": {"channel": "discord", "approve": ["approve"], "shelve": ["shelve"], "modify": ["modify"]},
     }
     data.update(overrides)
     return TriageConfig.from_dict(data)

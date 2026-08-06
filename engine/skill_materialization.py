@@ -55,12 +55,17 @@ def skill_targets(cfg: TriageConfig, output_root: str | Path | None = None) -> t
         for source in cfg.sources
     ]
     profile = cfg.hermes.gateway_profile
+    live_destination = (
+        f"$HERMES_HOME/skills/{ORCHESTRATOR_SKILL}/SKILL.md"
+        if profile == cfg.hermes.base_profile
+        else f"$HERMES_HOME/profiles/{profile}/skills/{ORCHESTRATOR_SKILL}/SKILL.md"
+    )
     targets.append(
         SkillTarget(
             profile=profile,
             skill=ORCHESTRATOR_SKILL,
             path=(staging / profile / "skills" / ORCHESTRATOR_SKILL / "SKILL.md").resolve(),
-            live_destination=f"$HERMES_HOME/profiles/{profile}/skills/{ORCHESTRATOR_SKILL}/SKILL.md",
+            live_destination=live_destination,
         )
     )
     return tuple(targets)
@@ -128,7 +133,11 @@ def materialize_skills(
         else:
             rendered = _render(
                 orchestrator_template,
-                {"BOARD": cfg.board, "PROJECT_ROOT": cfg.hermes.project_root},
+                {
+                    "BOARD": cfg.board,
+                    "PROJECT_ROOT": cfg.hermes.project_root,
+                    "GATE_TARGET": cfg.gate.target or cfg.gate.channel,
+                },
                 expected_name=target.skill,
             )
         target.path.parent.mkdir(parents=True, exist_ok=True)

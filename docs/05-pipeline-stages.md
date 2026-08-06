@@ -15,10 +15,10 @@ detect** — no dedup/score/route.
 - ⚠️ **Gotcha — profile-local cron, scout-local gateway.** On Hermes 0.20,
   cron is owned by the profile that runs the scout, not by the orchestrator.
   Each scout profile registers its own `hermes -p <scout> cron create …`
-  job and runs its own gateway so the cron scheduler ticks. The orchestrator
-  profile keeps Kanban dispatch enabled (`kanban.dispatch_in_gateway: true`).
+  job and runs its own gateway so the cron scheduler ticks. The configured
+  gateway profile keeps Kanban dispatch enabled (`kanban.dispatch_in_gateway: true`).
   Scout profiles disable it (`kanban.dispatch_in_gateway: false`) so they
-  only generate intake cards; the orchestrator gateway is the sole dispatcher.
+  only generate intake cards; the configured gateway profile is the sole dispatcher.
   `python -m cli.triage scaffold` renders all of this.
 - ⚠️ **Gotcha — toolsets on the right execution surface.** Tools are bound to
   execution surfaces, not profiles. Cron-run scout agents use the `cron`
@@ -72,7 +72,7 @@ the orchestrator drafts the proposal from `paths/proposals/<path>.md`, sets
 `status: awaiting_approval`, and **sends it**.
 
 - ⚠️ **Gotcha — delivery ≠ status.** The orchestrator is a headless worker. It
-  MUST run `hermes send --to telegram --file <proposal>`; setting the status field
+  MUST run `hermes send --to <gate.target> --file <proposal>`; setting the status field
   notifies no one. (The first live run of the origin system produced proposals
   that never reached the human because of exactly this.)
 
@@ -81,8 +81,8 @@ the orchestrator drafts the proposal from `paths/proposals/<path>.md`, sets
 The human replies (verbs from `gate:`). The orchestrator shells to
 `proposal_actions.py {approve|shelve|shelve-all|modify}`.
 
-- ⚠️ **Gotcha — no leading slash.** Telegram reserves `/commands`; `/approve` is
-  intercepted. Reply `approve <slug>`.
+- ⚠️ **Gotcha — no leading slash.** `/approve` is Hermes's command-execution
+  approval command, not the pipeline gate. Reply with ordinary text: `approve <slug>`.
 - The gate is **non-blocking**: while waiting, the orchestrator processes other
   items.
 

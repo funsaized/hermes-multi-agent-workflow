@@ -116,7 +116,8 @@ class Dedup:
 
 @dataclass
 class Gate:
-    channel: str = "telegram"
+    channel: str = "discord"
+    target: str | None = None
     approve: list[str] = field(default_factory=lambda: ["approve"])
     shelve: list[str] = field(default_factory=lambda: ["shelve", "reject the rest"])
     modify: list[str] = field(default_factory=lambda: ["modify"])
@@ -351,6 +352,10 @@ class TriageConfig:
             )
 
         # Hermes deployment metadata and topology.
+        if self.gate.target and not self.gate.target.startswith(f"{self.gate.channel}:"):
+            errors.append(
+                f"gate.target {self.gate.target!r} must use the gate.channel {self.gate.channel!r} prefix."
+            )
         if not self.hermes.min_version:
             errors.append("hermes.min_version must be a non-empty version string.")
         elif parse_version_triplet(self.hermes.min_version) is None:

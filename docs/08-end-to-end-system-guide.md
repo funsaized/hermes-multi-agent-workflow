@@ -61,13 +61,13 @@ an application that can be enabled unchanged.
                  v
               HUMAN PLANE
      ┌───────────────────────────────────────────────────────┐
-     │ Telegram or another Hermes gateway channel            │
+     │ Discord #briefs through the existing Hermes gateway   │
      │ approve | shelve | modify                              │
      └───────────────────────────────────────────────────────┘
 ```
 
 There is no separate message broker. The Kanban database is the durable control
-bus. Files are the artifact plane. Telegram is for the human decision, not for
+bus. Files are the artifact plane. Discord is for the human decision, not for
 agent-to-agent coordination.
 
 Evidence: `README.md:3-17`, `docs/01-architecture.md:3-30`,
@@ -144,7 +144,7 @@ Hermes contributes mechanisms this repository does not implement:
 - **Kanban**: task state, dependencies, comments, run history, crash recovery,
   workspaces, and dispatcher claims;
 - **gateway**: long-running cron and Kanban runtime plus inbound messaging;
-- **send**: outbound delivery through Telegram/Discord/etc.;
+- **send**: outbound delivery through Discord or another configured platform;
 - **dashboard/CLI**: human observability and recovery.
 
 The installed runtime inspected for this assessment is Hermes Agent 0.20.0
@@ -563,7 +563,7 @@ Live evidence at audit time: `python -m cli.triage scaffold --format shell`
 and `python -m cli.triage preflight --format json` ran against the installed
 Hermes 0.20.0 home; preflight reported the expected undeployed-resource and
 toolset-name blockers (board, profiles, skills, toolsets, gateways, cron jobs,
-Telegram gate target), which is the shape the verifier should return before
+Discord gate target), which is the shape the verifier should return before
 the scaffold is applied.
 
 Evidence: `engine/scaffold.py`, `engine/hermes_preflight.py`,
@@ -605,9 +605,9 @@ Evidence: `engine/engine.py:97-123`, `docs/02-the-board.md:30-50`.
 ### P0 — The human reply path is prose, not an explicit integration
 
 Outbound delivery is explicit (`hermes send`). Inbound gate handling assumes the
-orchestrator profile will receive a reply, infer the slug/action, load the right
+configured gateway profile will receive a reply, infer the slug/action, load the right
 skill/context, find the repo, and shell to `proposal_actions.py`. There is no
-implemented Telegram command parser, webhook, gateway hook, blocked gate card,
+implemented Discord command parser, webhook, gateway hook, blocked gate card,
 or session-correlation mechanism in this repository.
 
 Smallest reliable shape: represent approval as a blocked Kanban gate task and

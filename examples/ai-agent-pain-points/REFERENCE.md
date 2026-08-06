@@ -16,11 +16,10 @@ Kanban board.
 
 ## Why single-machine, one board
 
-An earlier design used three devices coordinating over a Telegram bot-to-bot bus.
-That proved unreliable (bot-to-bot Telegram is staged-rollout and flaky). The
-working design collapses everything onto **one host, one Kanban board** as the
-inter-agent bus, and keeps Telegram for the **human gate only** (human↔bot is
-reliable). No cross-device transport, no message queue between agents.
+An earlier design used three devices coordinating over a bot-to-bot messaging
+bus. That proved unreliable. The working design collapses everything onto **one
+host, one Kanban board** as the inter-agent bus, and keeps Discord for the
+**human gate only**. No cross-device transport, no message queue between agents.
 
 ## The fleet (roles → models)
 
@@ -30,7 +29,7 @@ Eight profiles on one install, each bound to a model in its own config:
 |---|---|---|
 | scout (X) | Grok via OAuth | Hourly scrape of X for pain points |
 | scout (web) | GPT via OAuth | Hourly scrape of Reddit / YouTube / web |
-| orchestrator | GPT | Pipeline driver; the only Telegram-facing profile |
+| default gateway | GPT | Pipeline driver; reuses the existing Discord-facing root profile |
 | researcher | GPT | The three research lanes (verify / context / solutions audit) |
 | analyst | GPT | Synthesize problem + ideate solutions (build path) |
 | builder | GPT | Build the approved prototype |
@@ -56,7 +55,7 @@ scouts (cron, staggered)  →  intake card on the board
      confusing / poorly-doc'd → VIDEO
      good                     → SHELVE
         │
-   prep → PROPOSAL  → ── HUMAN GATE (Telegram) ── approve / shelve / modify
+   prep → PROPOSAL  → ── HUMAN GATE (Discord #briefs) ── approve / shelve / modify
         │
    BUILD:  prototype → test → report          VIDEO: slides → script → deliver
         │
@@ -104,7 +103,7 @@ them (see `docs/05-pipeline-stages.md`):
   notifies no one.
 - The first post-gate task must be created `ready` (no blocking parent) or it
   waits forever behind the still-open triage card.
-- Telegram reserves `/commands`, so gate replies carry no leading slash.
+- Gate replies use ordinary text; `/approve` is reserved for Hermes execution approval.
 
 ## What this instance proves
 

@@ -57,8 +57,8 @@ Use `.env.example` (committed, no values) to document required variables.
 
 ## Operational hardening
 
-- Give each profile the **minimum toolset** for its role. Only the orchestrator
-  needs Telegram; scouts need web + `kanban`; workers need only what they build
+- Give each profile the **minimum toolset** for its role. Only the configured
+  gateway needs Discord; scouts need web + `kanban`; workers need only what they build
   with.
 - Keep the **cost gate** on; it's a spend circuit-breaker, not just telemetry.
 - Prefer **read-only** scouting. The detection half should never mutate anything.

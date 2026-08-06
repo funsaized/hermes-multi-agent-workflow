@@ -14,7 +14,7 @@ The split:
 | `validate`                  | Checks `triage.yaml` consistency.                       | No              |
 | `preflight`                 | Confirms the installed Hermes runtime + configured resources are ready. Exits 1 on blockers. | No |
 | `scaffold`                  | Dry-run deployment plan (shell or JSON).                | No              |
-| `render-skills`             | Writes profile-specific `SKILL.md` files under `work/scaffold/profiles/...` and prints the exact `$HERMES_HOME/profiles/...` destination for each. | No |
+| `render-skills`             | Writes profile-specific `SKILL.md` files under `work/scaffold/profiles/...` and prints the exact live destination for each. | No |
 | `install`                   | Stub. Not implemented; deferred.                       | No              |
 
 You execute the scaffolded commands and the manual install yourself.
@@ -54,6 +54,11 @@ those commands on preflight capability checks. Skill installation and
 model/auth remain `CHECKPOINT:` comments (or `argv: null` in JSON), not
 invented commands.
 
+The configured `base_profile` is treated as pre-existing: the plan does not
+recreate it, overwrite its default working directory, or install a second
+gateway for it. This example sets `gateway_profile: default`, reusing the root
+Discord gateway as the sole dispatcher and inbound human-gate listener.
+
 By default, `scaffold` first performs the same read-only live inspection as
 `preflight` and reports blockers to stderr while still rendering the plan. Use
 `--no-preflight` in CI, offline environments, or whenever you only need the
@@ -61,9 +66,10 @@ pure configuration-derived plan; it does not weaken the checkpoint that must
 pass before a human executes the commands.
 
 Skill installation is NOT automated. The plan prints local staging paths
-(`work/scaffold/profiles/<profile>/skills/<skill>/SKILL.md`) and the exact
-`$HERMES_HOME/profiles/<profile>/skills/<skill>/SKILL.md` destination for
-each. The model/auth checkpoints are yours to perform.
+(`work/scaffold/profiles/<profile>/skills/<skill>/SKILL.md`) and the exact live
+destination for each. Cloned profiles use
+`$HERMES_HOME/profiles/<profile>/skills/<skill>/SKILL.md`; the base profile uses
+`$HERMES_HOME/skills/<skill>/SKILL.md`. The model/auth checkpoints are yours.
 
 ## 3. Create the board
 
@@ -81,7 +87,8 @@ Setting it to the repo root keeps workers close to `triage.yaml` and
 ## 4. Create the profiles
 
 One profile per distinct value in `roles:` plus each `sources[].profile`. The
-scaffold emits one `hermes profile create <name> --clone-from <base>
+already-existing `hermes.base_profile` is reused. For every other profile, the
+scaffold emits `hermes profile create <name> --clone-from <base>
 --no-alias --description '<from triage.yaml>'` per profile. `--no-alias` keeps
 rehearsals inside their temporary home; remove it on your real machine if you
 want per-profile wrapper scripts (`orchestrator`, `xresearch`, …) on PATH.
@@ -92,16 +99,19 @@ hermes profile create <name> --clone-from <base> \
     --description '<from triage.yaml>'
 ```
 
-Each profile's description MUST match `hermes.profiles.<name>.description`
+Each cloned profile's description MUST match `hermes.profiles.<name>.description`
 exactly — `preflight` checks it through `profile describe` and fails the run
-if the configured description drifts. Multi-model is fine: a scout can use
+if the configured description drifts. The base profile's existing description
+is intentionally not enforced. Multi-model is fine: a scout can use
 one provider, the orchestrator another. The profile is where the model is
 bound; the engine doesn't care.
 
-## 5. Pin each profile's working directory
+## 5. Pin each cloned profile's working directory
 
 `tools enable` and `cron create` both accept `--workdir`, but per-profile
-default state lives in the profile config. The scaffold emits:
+default state lives in the profile config. To avoid hijacking the user's normal
+CLI workspace, the scaffold leaves the base profile's default working directory
+alone and emits this only for cloned profiles:
 
 ```bash
 hermes -p <profile> config set terminal.cwd <abs-path-to-this-repo>
@@ -141,14 +151,16 @@ the next time the profile gets recreated.
 
 ## 7. Set dispatcher topology
 
-The orchestrator profile is the **sole** Kanban dispatcher. Every cron-owning
+The configured gateway profile is the **sole** Kanban dispatcher. In this
+deployment that is the existing `default` profile and its running Discord
+gateway. Every cron-owning
 scout profile has its own gateway only to tick its profile-local cron; it must
 not dispatch.
 
 The scaffold emits:
 
 ```bash
-hermes -p <orchestrator> config set kanban.dispatch_in_gateway true
+hermes -p default        config set kanban.dispatch_in_gateway true
 hermes -p <scout> config set kanban.dispatch_in_gateway false
 ```
 
@@ -160,8 +172,9 @@ The scaffold does not write live profile directories. Choose ONE of:
 
 - **Reviewed local copy.** `python -m cli.triage render-skills` writes
   `work/scaffold/profiles/<profile>/skills/<skill>/SKILL.md` and prints the
-  matching `$HERMES_HOME/profiles/<profile>/skills/<skill>/SKILL.md` for each
-  rendered file. Review the local file, then copy it to the printed live
+  matching live destination for each rendered file. The default profile's
+  orchestrator skill goes to `$HERMES_HOME/skills/triage-orchestrator/SKILL.md`.
+  Review the local file, then copy it to the printed live
   destination yourself.
 - **Profile distribution.** Package the rendered profile tree as a Hermes
   profile distribution and install it once `hermes profile install <local>`
@@ -174,8 +187,8 @@ not script it.
 ## 9. Model + provider auth (manual checkpoints)
 
 The scaffold emits one `CHECKPOINT:` per profile for model/provider selection
-and provider authentication. Per-profile auth is **not** shared: logging into
-`openrouter` on `orchestrator` does not cover `xresearch`. Use each profile's
+and provider authentication. Per-profile auth is **not** shared: authentication
+on `default` does not cover `xresearch`. Use each profile's
 interactive login flow (or `hermes profile show` to inspect the resolved
 config) and never commit credentials. The planner does not invent provider
 commands; it surfaces the requirement and stops.
@@ -186,21 +199,22 @@ commands; it surfaces the requirement and stops.
 
 ## 10. Configure the gate channel
 
-The gate channel is owned by the orchestrator profile. For Telegram, set the
-bot token and allowed-user list in `~/.hermes/profiles/<orchestrator>/.env`
-(not in this repository) and run the orchestrator gateway. Verify delivery:
+The gate uses the existing root/default Discord gateway. Keep its credentials in
+`$HERMES_HOME/.env` (not in this repository): `DISCORD_BOT_TOKEN`,
+`DISCORD_ALLOWED_USERS`, and `DISCORD_HOME_CHANNEL`. The configured target is
+`discord:1484142557704491119` (`Gaymerz / #briefs`). Verify target discovery:
 
 ```bash
-hermes -p <orchestrator> gateway run --foreground     # logs live
-hermes -p <orchestrator> send --to telegram "delivery check"
+hermes -p default gateway status
+hermes -p default send --list discord
 ```
 
-If you use `--background`, route through systemd/launchd
-(`hermes -p <orchestrator> gateway install --start-now --start-on-login` on
-this profile). The first live run on a fresh home must DM the bot once so
-Telegram will deliver back.
+Do not install or run a second gateway with the same Discord bot token. The
+existing default gateway already owns inbound Discord. Sending a live delivery
+check is an external side effect; do it only when explicitly approved:
+`hermes -p default send --to discord:1484142557704491119 "delivery check"`.
 
-> ⚠️ **Approval boundary.** Every Telegram reply verb is a model-driven
+> ⚠️ **Approval boundary.** Every Discord reply verb is a model-driven
 > interpretation of the human's text. The orchestrator skill must invoke
 > `proposal_actions.py {approve|shelve|shelve-all|modify}` deterministically.
 > Status fields do not notify anyone. `python -m cli.triage install` does
@@ -216,8 +230,8 @@ prompt is the source's `query` from `triage.yaml`.
 
 > **`--deliver local`** is intentional. Scout jobs create intake cards on
 > the board; their purpose is not to send you a cron response. `--deliver
-> local` keeps cron output out of Telegram/Discord. The orchestrator
-> gateway is what actually DMs you when proposals become ready.
+> local` keeps cron output out of Discord. The default gateway is what actually
+> sends proposals when they become ready.
 
 `--workdir` is required on every scout cron so AGENTS.md / CLAUDE.md /
 .cursorrules inject and the worker CWD is the repo. Use the absolute path
@@ -235,7 +249,7 @@ hermes -p <scout> cron status            # scheduler running
 ## 12. Start the gateways
 
 ```bash
-hermes -p <orchestrator> gateway install --start-now --start-on-login
+hermes -p default       gateway status  # reuse; do not install a duplicate
 hermes -p <scout>       gateway install --start-now --start-on-login  # once per cron-owning scout profile
 ```
 
@@ -278,8 +292,8 @@ their respective gateways being up.
 
 ## Day-to-day
 
-- **Watch:** `hermes kanban --board <board> list`. Progress also DMs to you
-  via the orchestrator gateway.
+- **Watch:** `hermes kanban --board <board> list`. Progress also appears in
+  Discord `#briefs` through the default gateway.
 - **Decide:** reply (no slash) `approve <slug>` / `shelve <slug>: reason` /
   `modify <slug>: change`; `reject the rest` (or `python proposal_actions.py
   shelve-all`) clears the queue.
@@ -297,7 +311,7 @@ their respective gateways being up.
   these; verify before any push.
 - **`install` is a stub.** It does not send messages, does not start
   gateways, and does not register crons. Nothing here ships a model,
-  provider key, or Telegram token.
+  provider key, or Discord token.
 - **No model/auth command is invented.** Every profile's provider and
   gate-channel auth is a manual checkpoint surfaced by the scaffold.
 - **Cron owns nothing you didn't write.** `--deliver local` keeps scout
@@ -313,7 +327,7 @@ their respective gateways being up.
 | Crons never fire | The owning profile's gateway is not running. Run `hermes -p <scout> gateway status` and `hermes gateway list` to confirm. The job is registered under one profile; the scheduler must tick under that same profile. |
 | Card stuck in `todo` | It has an unfinished parent. Don't parent the first post-gate task to the triage card. |
 | Proposal status set but no DM | Orchestrator didn't `hermes send`; status ≠ delivery (docs/05). |
-| `/approve` "unknown command" | Telegram reserves `/`; reply without the slash. |
+| `/approve` triggers the wrong approval flow | Hermes reserves it for command execution; reply with ordinary text `approve <slug>`. |
 | Final delivery can't find artifacts | A stage used scratch, not the persistent `dir` workspace. |
 | `gateway start` fails on WSL | Use `hermes -p <profile> gateway run` (foreground). |
 | `gateway install` is invasive on disposable rehearsal | Use `hermes -p <profile> gateway run --foreground` or run the rehearsal with `HERMES_RUN_DISPOSABLE_REHEARSAL=1 python -m unittest tests.integration.test_scaffold_disposable_home -v` (it sanitizes `HOME`/`HERMES_HOME`/`TMPDIR`, refuses mutation unless Hermes discovers an isolation sentinel, and cleans up automatically). |

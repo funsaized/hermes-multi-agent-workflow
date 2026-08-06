@@ -78,10 +78,10 @@ These cost real debugging in the system this was extracted from. Preserve them:
   dirs are wiped between tasks, stranding the final delivery step. `engine.py`
   already does this for `fulfill` chains — don't change it to scratch.
 - **Setting status ≠ delivering.** The orchestrator is a headless worker; it must
-  actually run `hermes send --to telegram` to reach the human. Status fields
+  actually run `hermes send --to <gate.target>` to reach the human. Status fields
   don't notify anyone.
-- **Telegram reserves `/commands`.** Gate replies carry NO leading slash
-  (`approve <slug>`, not `/approve`).
+- **Gate replies are ordinary text.** Use `approve <slug>`, not `/approve`;
+  Hermes reserves `/approve` for command-execution approval.
 - **First task in a post-gate chain must be `ready` (no blocking parent).** A
   child of the still-open triage task would sit in `todo` forever.
 

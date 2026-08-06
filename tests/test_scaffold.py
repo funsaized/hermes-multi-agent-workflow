@@ -42,7 +42,7 @@ def config_data() -> dict:
         "route": {"classifier": "audit.result", "map": {"good": "shelve"}},
         "paths": {"shelve": {"auto": True}},
         "roles": {"orchestrator": "orchestrator", "researcher": "researcher"},
-        "gate": {"channel": "telegram"},
+        "gate": {"channel": "discord", "target": "discord:briefs"},
         "hermes": {
             "min_version": "0.20.0",
             "base_profile": "default",
@@ -146,6 +146,13 @@ class DeploymentConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "relative.*config file location"):
             TriageConfig.from_dict(config_data())
 
+    def test_gate_target_must_match_gate_channel(self):
+        data = config_data()
+        data["gate"]["target"] = "telegram:briefs"
+
+        with self.assertRaisesRegex(ConfigError, "gate.target.*gate.channel"):
+            TriageConfig.from_dict(data, config_path=ROOT / "triage.yaml")
+
 
 class DeploymentPlannerTests(unittest.TestCase):
     def setUp(self):
@@ -202,6 +209,20 @@ class DeploymentPlannerTests(unittest.TestCase):
         self.assertNotIn("api_key", flat.lower())
         discovery = [step for step in self.plan.steps if isinstance(step, ManualCheckpoint) and step.phase == "runtime preflight"]
         self.assertTrue(any("cron" in " ".join(step.verification).lower() and "platform" in " ".join(step.verification).lower() for step in discovery))
+
+    def test_existing_base_profile_is_reused_as_gateway(self):
+        data = config_data()
+        data["roles"]["orchestrator"] = "default"
+        data["hermes"]["gateway_profile"] = "default"
+        data["hermes"]["profiles"]["default"] = data["hermes"]["profiles"].pop("orchestrator")
+        cfg = TriageConfig.from_dict(data, config_path=ROOT / "triage.yaml")
+
+        commands = [step.argv for step in build_deployment_plan(cfg).steps if isinstance(step, CommandStep)]
+
+        self.assertFalse(any(command[:4] == ("hermes", "profile", "create", "default") for command in commands))
+        self.assertNotIn(("hermes", "-p", "default", "gateway", "install", "--start-now", "--start-on-login"), commands)
+        self.assertNotIn(("hermes", "-p", "default", "config", "set", "terminal.cwd", str(ROOT.resolve())), commands)
+        self.assertIn(("hermes", "-p", "default", "config", "set", "kanban.dispatch_in_gateway", "true"), commands)
 
     @patch("subprocess.run")
     def test_planner_never_runs_subprocess(self, run):

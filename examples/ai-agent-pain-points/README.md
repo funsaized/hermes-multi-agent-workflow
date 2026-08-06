@@ -16,7 +16,7 @@ every config block. For a full architectural write-up of the origin system, see
   solutions — the audit emits `solution_quality`.
 - **Route:** `missing`/`broken` → **build** a fix; `confusing`/`poorly_documented`/
   `outdated` → make an explainer **video**; `good` → **shelve**.
-- **Gate:** one Telegram approval per item.
+- **Gate:** one Discord approval per item in `Gaymerz / #briefs`.
 - **Fulfill:** build path → prototype → test → report; video path → slides →
   script → deliver.
 

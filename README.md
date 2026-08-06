@@ -62,7 +62,7 @@ The CLI exposes five surfaces; four are runnable now, one is a stub:
 | `validate`        | No              | Checks `triage.yaml` consistency. |
 | `preflight`       | No              | Confirms the installed Hermes version/flags exist and which configured resources are already present. Exits 1 on blockers. |
 | `scaffold`        | No (dry run)    | Renders the deployment plan (shell or JSON) without executing it. Runs read-only preflight by default; use `--no-preflight` for offline rendering. |
-| `render-skills`   | Writes local staging only | Renders `work/scaffold/profiles/<profile>/skills/<skill>/SKILL.md` and prints the exact `$HERMES_HOME/profiles/...` destination for each reviewed-copy or future profile-distribution install. |
+| `render-skills`   | Writes local staging only | Renders `work/scaffold/profiles/<profile>/skills/<skill>/SKILL.md` and prints the exact live destination. The base profile uses `$HERMES_HOME/skills/...`; cloned profiles use `$HERMES_HOME/profiles/...`. |
 | `install`         | No (stub)       | Still a stub. Auto-apply of the scaffold plan is intentionally deferred. |
 
 `scaffold` prints commands; `preflight` verifies the runtime; `render-skills`
@@ -80,7 +80,7 @@ at. Hand your coding agent **`AGENTS.md`** and ask it to walk you through
 3. Edit `skills/templates/` (scout queries + orchestrator notes).
 4. `python -m cli.triage validate`, keep `tests/` green.
 5. Follow `docs/07-runbook.md` for the Hermes 0.20 setup flow (profile-local cron,
-   scout gateways, dispatcher in the orchestrator only, reviewed local skill
+   scout gateways, dispatcher in the configured gateway only, reviewed local skill
    copy or future profile distribution). `install` is still a stub.
 
 ## Repository layout

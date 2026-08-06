@@ -51,6 +51,7 @@ class SkillMaterializationTests(unittest.TestCase):
             orchestrator_text = orchestrator.path.read_text(encoding="utf-8")
             self.assertIn("test-board", orchestrator_text)
             self.assertIn(str(project.resolve()), orchestrator_text)
+            self.assertIn("hermes send --to discord:briefs", orchestrator_text)
             self.assertNotIn("TODO", orchestrator_text)
             self.assertNotIn("{{", orchestrator_text)
 
@@ -73,6 +74,20 @@ class SkillMaterializationTests(unittest.TestCase):
             self.assertIn(str(targets[0].path), instructions)
             self.assertIn(targets[0].live_destination, instructions)
             self.assertIn("Automatic `hermes profile install` remains deferred", instructions)
+
+    def test_base_profile_skill_destination_uses_root_hermes_home(self):
+        data = config_data()
+        data["roles"]["orchestrator"] = "default"
+        data["hermes"]["gateway_profile"] = "default"
+        data["hermes"]["profiles"]["default"] = data["hermes"]["profiles"].pop("orchestrator")
+        cfg = TriageConfig.from_dict(data, config_path=ROOT / "triage.yaml")
+
+        orchestrator = skill_targets(cfg)[-1]
+
+        self.assertEqual(
+            orchestrator.live_destination,
+            "$HERMES_HOME/skills/triage-orchestrator/SKILL.md",
+        )
 
     def test_rejects_unresolved_placeholders_and_invalid_frontmatter(self):
         with tempfile.TemporaryDirectory(prefix="bad templates ") as tmp:

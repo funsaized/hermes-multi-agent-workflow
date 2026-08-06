@@ -39,12 +39,15 @@ cost_gate_usd: 5
 hermes:
   min_version: "0.20.0"
   base_profile: default
-  gateway_profile: orchestrator
+  # Reuse the already-running root gateway. This avoids two gateways competing
+  # for the same Discord bot token; scout profiles still run their own cron-only
+  # gateways with Kanban dispatch disabled.
+  gateway_profile: default
   project_root: .
   profile_strategy: clone
   profiles:
-    orchestrator:
-      description: "Owns triage state, routes work, and handles the human gate."
+    default:
+      description: "Existing root profile; owns triage state, routing, and the Discord human gate."
       toolsets: [file, terminal, kanban]
     researcher:
       description: "Performs source-backed research lanes and structured handoffs."
@@ -201,7 +204,7 @@ paths:
 # scaffolder (cli/triage.py scaffold) can create these profiles for you.
 # --------------------------------------------------------------------------- #
 roles:
-  orchestrator:   orchestrator
+  orchestrator:   default
   researcher:     researcher
   analyst:        analyst
   builder:        builder
@@ -210,11 +213,12 @@ roles:
 
 # --------------------------------------------------------------------------- #
 # GATE — the single human approval point. The orchestrator maps these reply
-# verbs to proposal_actions.py subcommands. Telegram note: replies carry NO
-# leading slash (Telegram reserves /commands).
+# verbs to proposal_actions.py subcommands. Use ordinary text replies; `/approve`
+# is Hermes command-execution approval, not this workflow's proposal action.
 # --------------------------------------------------------------------------- #
 gate:
-  channel: telegram
+  channel: discord
+  target: discord:1484142557704491119  # Gaymerz / #briefs
   approve: [approve]
   shelve:  [shelve, "reject the rest"]
   modify:  [modify]
