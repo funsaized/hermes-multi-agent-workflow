@@ -32,6 +32,45 @@ workspace_root: ./work
 cost_gate_usd: 5
 
 # --------------------------------------------------------------------------- #
+# HERMES DEPLOYMENT — validated metadata for the side-effect-free scaffolder.
+# Profiles are cloned, but model/provider selection and all credentials remain
+# explicit human checkpoints. `project_root` resolves from this file's location.
+# --------------------------------------------------------------------------- #
+hermes:
+  min_version: "0.20.0"
+  base_profile: default
+  gateway_profile: orchestrator
+  project_root: .
+  profile_strategy: clone
+  profiles:
+    orchestrator:
+      description: "Owns triage state, routes work, and handles the human gate."
+      toolsets: [file, terminal, kanban]
+    researcher:
+      description: "Performs source-backed research lanes and structured handoffs."
+      toolsets: [web, file]
+    analyst:
+      description: "Synthesizes research and develops bounded proposals."
+      toolsets: [web, file]
+    builder:
+      description: "Builds only approved artifacts within path scope rails."
+      toolsets: [file, terminal, coding]
+    tester:
+      description: "Independently tests approved artifacts and reports evidence."
+      toolsets: [file, terminal]
+    video_producer:
+      description: "Produces source-backed slides and scripts."
+      toolsets: [web, file]
+    xresearch:
+      description: "Scheduled source scout for X."
+      toolsets: [x_search, file, kanban]
+      owns_cron: true
+    webresearch:
+      description: "Scheduled scout for web, Reddit, and YouTube."
+      toolsets: [web, file, kanban]
+      owns_cron: true
+
+# --------------------------------------------------------------------------- #
 # SOURCES — the scouts. Each is a Hermes profile running a scout skill on a cron.
 # The profile binds the model (e.g. one scout on Grok, the rest on GPT). The
 # `query` is the domain prompt that tells the scout what to look for.

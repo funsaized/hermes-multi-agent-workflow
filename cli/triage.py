@@ -4,11 +4,12 @@
 Commands:
   validate   Load triage.yaml and check it for consistency. FULLY IMPLEMENTED —
              run this after every edit.
-  scaffold   Print the Hermes commands to create the profiles, install the skill
-             templates, create the board, and register the scout crons implied by
-             triage.yaml. PRINTS the plan; it does not execute (so you can review
-             before running, and because the exact `hermes` invocations depend on
-             your install). Marked TODO where you must confirm syntax.
+  scaffold   Render a structured, side-effect-free Hermes deployment plan as
+             safely quoted shell or JSON. It never executes the commands.
+  preflight  Run structured, read-only Hermes capability and deployment checks.
+  render-skills
+             Materialize profile-specific skills under work/scaffold without
+             writing to live Hermes profiles.
   init       Stub. Intended to copy triage.yaml + path templates into a fresh
              project. For now, copy this repo and edit triage.yaml directly.
   install    Stub. Intended to actually run the scaffold plan. Left manual on
@@ -25,6 +26,9 @@ import sys
 from pathlib import Path
 
 from engine.config import ConfigError, TriageConfig
+from engine.hermes_preflight import run_preflight
+from engine.scaffold import build_deployment_plan, render_json, render_shell
+from engine.skill_materialization import SkillTemplateError, materialize_skills
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -41,6 +45,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
     print(f"  routes: {cfg.route.map}")
     print(f"  paths: {sorted(cfg.paths)}")
     print(f"  roles -> profiles: {cfg.roles}")
+    for warning in cfg.validation_warnings:
+        print(f"  ! {warning}")
     # Warn about referenced-but-missing template files (non-fatal).
     missing = []
     for p in cfg.paths.values():
@@ -55,30 +61,49 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def cmd_scaffold(args: argparse.Namespace) -> int:
-    cfg = TriageConfig.load(args.config)
-    print(f"# Scaffold plan for pipeline {cfg.name!r}. Review, then run the commands you trust.\n")
-    print(f"# 1. Create the dedicated board")
-    print(f"hermes kanban boards create {cfg.board}    # TODO: confirm subcommand on your Hermes version\n")
-    print(f"# 2. Create the profiles (one per role + one per source profile)")
-    profiles = sorted(set(cfg.roles.values()) | {s.profile for s in cfg.sources})
-    for prof in profiles:
-        print(f"hermes profile create {prof} --from <base-profile>   # TODO: set model in {prof}/config.yaml")
-    print()
-    print(f"# 3. Source profiles need the `kanban` toolset (they run via cron, not the dispatcher)")
-    for s in cfg.sources:
-        print(f"#   edit ~/.hermes/profiles/{s.profile}/config.yaml → toolsets: [hermes-cli, kanban]")
-    print()
-    print(f"# 4. Install skills: copy skills/templates/triage-orchestrator → orchestrator profile,")
-    print(f"#    and triage-scout → each source profile (rename per source).")
-    for s in cfg.sources:
-        print(f"#   {s.skill} → profile {s.profile}")
-    print()
-    print(f"# 5. Register scout crons in the GATEWAY profile's store (v0.15.0+ reads only that store)")
-    for s in cfg.sources:
-        print(f"orchestrator cron create '{s.schedule}' --profile {s.profile} --skill {s.skill}   # TODO confirm flags")
-    print()
-    print(f"# 6. Start the runtime (WSL: foreground):  orchestrator gateway run")
-    print(f"# See docs/07-runbook.md for the full go-live sequence.")
+    try:
+        cfg = TriageConfig.load(args.config)
+    except ConfigError as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    if not args.no_preflight:
+        report = run_preflight(cfg)
+        if not report.ok:
+            print(
+                f"[preflight warning] {len(report.errors)} blocker(s) detected; "
+                "the scaffold below is a read-only plan. Run `python -m cli.triage preflight` for evidence.",
+                file=sys.stderr,
+            )
+        for warning in report.warnings:
+            print(f"[preflight warning] {warning}", file=sys.stderr)
+    plan = build_deployment_plan(cfg)
+    output = render_json(plan) if args.format == "json" else render_shell(plan)
+    print(output, end="")
+    return 0
+
+
+def cmd_preflight(args: argparse.Namespace) -> int:
+    try:
+        cfg = TriageConfig.load(args.config)
+    except ConfigError as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    report = run_preflight(cfg)
+    print(report.render_json() if args.format == "json" else report.render_text(), end="")
+    return 0 if report.ok else 1
+
+
+def cmd_render_skills(args: argparse.Namespace) -> int:
+    try:
+        cfg = TriageConfig.load(args.config)
+        targets = materialize_skills(cfg)
+    except (ConfigError, SkillTemplateError, OSError) as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    for target in targets:
+        print(f"[rendered] {target.path}")
+        print(f"  reviewed manual destination: {target.live_destination}")
+    print("No live Hermes profile was modified; installation remains a reviewed manual step.")
     return 0
 
 
@@ -95,7 +120,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", default="triage.yaml")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("validate", help="Validate triage.yaml.").set_defaults(func=cmd_validate)
-    sub.add_parser("scaffold", help="Print the setup plan from triage.yaml.").set_defaults(func=cmd_scaffold)
+    scaffold = sub.add_parser("scaffold", help="Print the setup plan from triage.yaml.")
+    scaffold.add_argument("--format", choices=("shell", "json"), default="shell")
+    scaffold.add_argument(
+        "--no-preflight",
+        action="store_true",
+        help="Render the pure deployment plan without inspecting a live Hermes runtime.",
+    )
+    scaffold.set_defaults(func=cmd_scaffold)
+    preflight = sub.add_parser("preflight", help="Read-only Hermes capability and deployment checks.")
+    preflight.add_argument("--format", choices=("text", "json"), default="text")
+    preflight.set_defaults(func=cmd_preflight)
+    sub.add_parser("render-skills", help="Render profile-specific skills into work/scaffold.").set_defaults(func=cmd_render_skills)
     sub.add_parser("init", help="(stub) Start a new project.").set_defaults(func=cmd_stub("init"))
     sub.add_parser("install", help="(stub) Execute the scaffold plan.").set_defaults(func=cmd_stub("install"))
     args = parser.parse_args(argv)

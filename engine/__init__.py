@@ -9,3 +9,12 @@ first, then `docs/04-adapting-to-your-domain.md`. Do NOT edit this package to
 encode your domain — edit `triage.yaml`. Touch the engine only to add a new
 *mechanism*, never a new *topic*.
 """
+
+from .scaffold import (  # noqa: F401
+    CommandStep,
+    DeploymentPlan,
+    ManualCheckpoint,
+    build_deployment_plan,
+    render_json,
+    render_shell,
+)

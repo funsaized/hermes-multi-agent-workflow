@@ -1,25 +1,18 @@
 ---
-name: triage-scout
+name: {{SKILL_NAME}}
 description: >
-  Scout skill template for the Hermes Multi-Agent Workflow. Runs on a cron under a
-  source profile, searches for candidate items in your domain, writes a report to
-  the intake vault, and creates one `intake` Kanban task on the triage board.
-  COPY this per source (e.g. triage-scout-x, triage-scout-web) and fill the TODOs.
+  Source-specific scout for {{SOURCE_ID}}. Runs on a cron under {{PROFILE}}, searches
+  for candidate items, writes a report to the shared intake vault, and creates one
+  intake Kanban task on board {{BOARD}}.
 metadata:
   hermes:
     tags: [triage, scout, intake]
 ---
 
-# Triage scout
+# Triage scout: {{SOURCE_ID}}
 
-> **For the adapting agent:** this is a TEMPLATE. Make one copy per `sources[]`
-> entry in `triage.yaml` (e.g. `triage-scout-x`, `triage-scout-web`), give each
-> the matching `name`, and paste that source's `query` into "What to look for".
-> Install each copy on the profile named in that source. See
-> `docs/04-adapting-to-your-domain.md` and `docs/05-pipeline-stages.md`.
->
-> **Want a worked example?** `examples/ai-agent-pain-points/reference-skills/pain-point-scout-x/SKILL.md`
-> is a real, filled-in copy of this template from the live system.
+This rendered skill belongs to profile `{{PROFILE}}` and runs from
+`{{PROJECT_ROOT}}`.
 
 ## When to use
 
@@ -27,7 +20,7 @@ Fired hourly by cron (the `schedule` in `triage.yaml`). Also runnable by hand fo
 a smoke test:
 
 ```
-<profile> chat --skills <this-skill-name> -q "Run one sweep now, following this skill exactly."
+hermes -p {{PROFILE}} chat --skills {{SKILL_NAME}} -q "Run one sweep now, following this skill exactly."
 ```
 
 ## Prerequisite (read once)
@@ -39,8 +32,7 @@ this; verify it.)
 
 ## What to look for
 
-<!-- TODO: paste the `query` from this source's entry in triage.yaml. -->
-<your domain search instructions here>
+{{QUERY}}
 
 ## Procedure
 
@@ -50,14 +42,14 @@ this; verify it.)
    and one line on **why it may matter**.
 3. Drop low-signal noise — vague hype, single-person rants with no corroboration.
 4. Write the full report to:
-   `${HERMES_PROFILE_DIR}/vault/intake/<UTC-timestamp>-<source-id>.md`
+   `{{INTAKE_DIR}}/<UTC-timestamp>-{{SOURCE_ID}}.md`
    in the format below.
 5. Create ONE intake Kanban task on the triage board:
 
    ```
    kanban_create(
-     board: "<board from triage.yaml>",
-     title: "intake: <source-id> <UTC-date>",
+     board: "{{BOARD}}",
+     title: "intake: {{SOURCE_ID}} <UTC-date>",
      assignee: "orchestrator",
      body: "<path to the report file you just wrote>",
    )   # no parents → lands `ready`; the orchestrator picks it up
@@ -66,7 +58,7 @@ this; verify it.)
 ## Report format (contract with engine/intake_parser.py)
 
 ```
-source: <source-id>
+source: {{SOURCE_ID}}
 captured_at: <UTC timestamp>
 
 ## Candidate: <title>

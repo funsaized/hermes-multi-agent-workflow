@@ -20,7 +20,8 @@ metadata:
 > the pipeline shape in prose here; it lives in `triage.yaml`. Read
 > `docs/01-architecture.md` and `docs/05-pipeline-stages.md`.
 
-All commands below run from the repo root with `triage.yaml` present.
+All commands below run from `{{PROJECT_ROOT}}` with `triage.yaml` present and
+operate on board `{{BOARD}}`.
 `TRIAGE_CONFIG`, `TRIAGE_VAULT_DIR`, and `HERMES_KANBAN_DB` are honored.
 
 ## Trigger

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Any
 
 try:
@@ -29,6 +30,17 @@ except ImportError as exc:  # pragma: no cover - environment guard
 
 class ConfigError(ValueError):
     """Raised with a human/agent-readable message when triage.yaml is invalid."""
+
+
+VERSION_RE = re.compile(
+    r"\A(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\Z"
+)
+
+
+def parse_version_triplet(value: str) -> tuple[int, int, int] | None:
+    """Parse the comparable release triplet from a semver-like version pin."""
+    match = VERSION_RE.fullmatch(value.strip())
+    return tuple(map(int, match.groups())) if match else None  # type: ignore[return-value]
 
 
 # --------------------------------------------------------------------------- #
@@ -110,6 +122,27 @@ class Gate:
     modify: list[str] = field(default_factory=lambda: ["modify"])
 
 
+@dataclass(frozen=True)
+class HermesProfile:
+    """Deployment metadata for one Hermes profile."""
+
+    description: str
+    toolsets: tuple[str, ...] = ()
+    owns_cron: bool = False
+
+
+@dataclass(frozen=True)
+class HermesDeployment:
+    """Validated, location-aware metadata used by the dry-run scaffolder."""
+
+    min_version: str
+    base_profile: str
+    gateway_profile: str
+    project_root: str
+    profile_strategy: str
+    profiles: dict[str, HermesProfile]
+
+
 @dataclass
 class TriageConfig:
     name: str
@@ -125,6 +158,8 @@ class TriageConfig:
     paths: dict[str, PathDef]
     roles: dict[str, str]
     gate: Gate
+    hermes: HermesDeployment
+    validation_warnings: tuple[str, ...] = ()
     raw: dict[str, Any] = field(default_factory=dict)
 
     # ----- convenience lookups the engine and proposal_actions use ----- #
@@ -148,10 +183,15 @@ class TriageConfig:
         if not p.exists():
             raise ConfigError(f"Config not found: {p}. Copy and edit the example triage.yaml.")
         data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-        return cls.from_dict(data)
+        return cls.from_dict(data, config_path=p)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "TriageConfig":
+    def from_dict(
+        cls,
+        data: dict[str, Any],
+        *,
+        config_path: str | Path | None = None,
+    ) -> "TriageConfig":
         def req(key: str) -> Any:
             if key not in data:
                 raise ConfigError(f"triage.yaml is missing required top-level key: `{key}`.")
@@ -186,20 +226,93 @@ class TriageConfig:
                 auto=bool(pd.get("auto", False)),
             )
 
+        roles = dict(req("roles"))
+        sources = [Source(**s) for s in data.get("sources", [])]
+        warnings: list[str] = []
+        hermes_d = data.get("hermes")
+        if hermes_d is None:
+            # Temporary compatibility for configs created before deployment
+            # metadata existed. The fallback is explicit about what it cannot
+            # know instead of silently inventing least-privilege settings.
+            warnings.append(
+                "`hermes:` is absent; deployment profiles were derived from roles/sources, "
+                "but descriptions and toolsets are unspecified. Add explicit `hermes.profiles` "
+                "metadata before applying the scaffold plan."
+            )
+            source_profiles = {source.profile for source in sources}
+            profile_names = sorted(set(roles.values()) | source_profiles)
+            profiles = {
+                name: HermesProfile(
+                    description=f"Profile {name} (derived from legacy configuration).",
+                    owns_cron=name in source_profiles,
+                )
+                for name in profile_names
+            }
+            gateway_profile = roles.get(
+                "orchestrator",
+                next(iter(roles.values()), profile_names[0] if profile_names else "orchestrator"),
+            )
+            root = (
+                Path(config_path).resolve().parent
+                if config_path is not None
+                else Path.cwd().resolve()
+            )
+            hermes = HermesDeployment(
+                min_version="0.20.0",
+                base_profile="default",
+                gateway_profile=gateway_profile,
+                project_root=str(root),
+                profile_strategy="clone",
+                profiles=profiles,
+            )
+        else:
+            project_root_value = str(hermes_d.get("project_root", "")).strip()
+            project_root = Path(project_root_value)
+            if not project_root_value:
+                resolved_root = project_root
+            elif project_root.is_absolute():
+                resolved_root = project_root.resolve()
+            elif config_path is None:
+                raise ConfigError(
+                    "Invalid triage.yaml:\n  - hermes.project_root is relative but no config file "
+                    "location was supplied; use TriageConfig.load() or pass config_path."
+                )
+            else:
+                resolved_root = (Path(config_path).resolve().parent / project_root).resolve()
+
+            profiles = {}
+            for name, profile_d in (hermes_d.get("profiles") or {}).items():
+                profile_d = profile_d or {}
+                profiles[str(name)] = HermesProfile(
+                    description=str(profile_d.get("description", "")),
+                    toolsets=tuple(str(value) for value in (profile_d.get("toolsets") or [])),
+                    owns_cron=bool(profile_d.get("owns_cron", False)),
+                )
+            hermes = HermesDeployment(
+                min_version=str(hermes_d.get("min_version", "")),
+                base_profile=str(hermes_d.get("base_profile", "")),
+                gateway_profile=str(hermes_d.get("gateway_profile", "")),
+                project_root=str(resolved_root),
+                profile_strategy=str(hermes_d.get("profile_strategy", "")),
+                profiles=profiles,
+            )
+
         cfg = cls(
             name=req("name"),
             board=req("board"),
             workspace_root=data.get("workspace_root", "./work"),
             cost_gate_usd=float(data.get("cost_gate_usd", 5)),
-            sources=[Source(**s) for s in data.get("sources", [])],
+            sources=sources,
             item_schema=list((data.get("item_schema") or {}).get("fields", [])),
             dedup=Dedup(**(data.get("dedup") or {})),
             rubric=rubric,
             research=research,
             route=route,
             paths=paths,
-            roles=dict(req("roles")),
+            roles=roles,
             gate=Gate(**(data.get("gate") or {})),
+            hermes=hermes,
+            validation_warnings=tuple(warnings),
             raw=data,
         )
         cfg.validate()
@@ -236,6 +349,71 @@ class TriageConfig:
                 f"research_lanes.classifier_lane ({self.research.classifier_lane!r}) "
                 f"is not one of the declared lanes {self.research.lanes}."
             )
+
+        # Hermes deployment metadata and topology.
+        if not self.hermes.min_version:
+            errors.append("hermes.min_version must be a non-empty version string.")
+        elif parse_version_triplet(self.hermes.min_version) is None:
+            errors.append(
+                "hermes.min_version must be a semantic version such as '0.20.0', "
+                "optionally with a prerelease or build suffix."
+            )
+        if not self.hermes.base_profile.strip():
+            errors.append("hermes.base_profile must be non-empty.")
+        if self.hermes.profile_strategy != "clone":
+            errors.append(
+                f"hermes.profile_strategy {self.hermes.profile_strategy!r} is unsupported; expected 'clone'."
+            )
+        if not self.hermes.project_root or not Path(self.hermes.project_root).is_absolute():
+            errors.append("hermes.project_root must resolve to an absolute path from the config file location.")
+        elif not Path(self.hermes.project_root).is_dir():
+            errors.append(
+                f"hermes.project_root does not resolve to an existing directory: {self.hermes.project_root!r}."
+            )
+
+        gateway = self.hermes.gateway_profile
+        if gateway not in self.hermes.profiles or gateway not in set(self.roles.values()):
+            errors.append(
+                f"hermes.gateway_profile {gateway!r} must be present in both roles and hermes.profiles."
+            )
+        for role, profile_name in self.roles.items():
+            if profile_name not in self.hermes.profiles:
+                errors.append(
+                    f"Role {role!r} maps to profile {profile_name!r}, which is missing from hermes.profiles."
+                )
+        seen_source_ids: set[str] = set()
+        seen_profile_skills: set[tuple[str, str]] = set()
+        for source in self.sources:
+            if source.id in seen_source_ids:
+                errors.append(
+                    f"Duplicate sources[].id {source.id!r}; source IDs must be unique."
+                )
+            seen_source_ids.add(source.id)
+            profile_skill = (source.profile, source.skill)
+            if profile_skill in seen_profile_skills:
+                errors.append(
+                    "Duplicate sources[] (profile, skill) pair "
+                    f"{profile_skill!r}; each rendered scout target must be unique."
+                )
+            seen_profile_skills.add(profile_skill)
+
+        source_profiles = {source.profile for source in self.sources}
+        for source in self.sources:
+            if source.profile not in self.hermes.profiles:
+                errors.append(
+                    f"Source {source.id!r} uses profile {source.profile!r}, which is missing from hermes.profiles."
+                )
+            elif not self.hermes.profiles[source.profile].owns_cron:
+                errors.append(
+                    f"Source {source.id!r} uses profile {source.profile!r}, but that profile must set owns_cron=true."
+                )
+        for name, profile in self.hermes.profiles.items():
+            if not profile.description.strip():
+                errors.append(f"hermes.profiles[{name!r}].description must be non-empty.")
+            if profile.owns_cron and name not in source_profiles:
+                errors.append(
+                    f"hermes.profiles[{name!r}] owns_cron=true but no source uses that profile."
+                )
 
         if errors:
             raise ConfigError("Invalid triage.yaml:\n  - " + "\n  - ".join(errors))
