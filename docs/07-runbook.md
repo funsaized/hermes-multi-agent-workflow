@@ -276,7 +276,8 @@ hermes -p <scout> cron status            # scheduler running
 
 ```bash
 hermes -p default       gateway status  # reuse; do not install a duplicate
-hermes -p <scout>       gateway install --start-now --start-on-login  # once per cron-owning scout profile
+hermes -p <scout>       gateway install --start-now --start-on-login  # unattended recurring discovery
+hermes -p <scout>       gateway run                                  # manual discovery window; no startup registration
 ```
 
 Each cron-owning scout needs its own running gateway so its scheduler ticks

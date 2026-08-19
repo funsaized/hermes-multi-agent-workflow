@@ -45,10 +45,10 @@ that belongs in config.
 
 **Fat engine, thin skill.** Deterministic calculations and task-spec generation
 (dedup, scoring math, route resolution, lane/stage specs, workspace selection)
-live in `engine/engine.py::TriageEngine`. The post-gate handler applies and links
-fulfillment specs. Pre-gate route-card creation, root completion, and prep linking
-still live in orchestrator prose; do not describe them as engine-enforced until a
-deterministic adapter exists. Read `docs/01-architecture.md`.
+live in `engine/engine.py::TriageEngine`. Deterministic adapters apply and link
+prep and fulfillment specs. Pre-gate route-card creation and root completion still
+live in orchestrator prose; do not describe those transitions as engine-enforced.
+Read `docs/01-architecture.md`.
 
 ## How to help the human adapt it (the standard flow)
 

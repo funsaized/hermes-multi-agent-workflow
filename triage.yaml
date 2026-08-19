@@ -45,6 +45,8 @@ hermes:
       toolsets: [file, terminal]
     webresearch:
       description: "Runs source-specific Skills Map scouts on profile-local cron."
+      # This workstation intentionally has no startup service for this profile.
+      # Start a discovery window manually with: hermes -p webresearch gateway run
       # Cron starts outside a Kanban task, so scouts use terminal to call the
       # supported `hermes kanban` CLI when creating the first intake card.
       toolsets: [web, file, terminal]

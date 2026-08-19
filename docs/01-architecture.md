@@ -67,8 +67,8 @@ yet fully enforced by deterministic code.
    Hermes workers may only complete their own task id; the engine creates
    neither the route card nor the board transitions today.
 4. The orchestrator reads the classifier's output and calls `engine.route()` to
-   pick a path. `engine.prep_specs()` returns ordered specs, but the caller must
-   create and link them into the **prep** chain.
+   pick a path. `pre_gate_actions.py` applies the ordered `engine.prep_specs()`
+   through resolved profiles and creates the linked **prep** chain idempotently.
 5. It drafts a proposal and **sends it to the human** (`hermes send`).
 6. The human replies; the orchestrator shells to `proposal_actions.py`, which
    reads `paths.<path>.fulfill` and spawns the **fulfillment** chain in a shared

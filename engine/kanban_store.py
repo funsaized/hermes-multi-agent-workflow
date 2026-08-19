@@ -16,6 +16,7 @@ future Hermes release changes that schema, update this adapter. See
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import secrets
 import sqlite3
@@ -55,8 +56,14 @@ class KanbanStore:
         created_by: str = "hermes-multi-agent-workflow",
         workspace_kind: str = "scratch",
         workspace_path: str | None = None,
+        idempotency_key: str | None = None,
     ) -> str:
-        task_id = self.new_task_id()
+        task_id = (
+            "t_" + hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:8]
+            if idempotency_key else self.new_task_id()
+        )
+        if conn.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone():
+            return task_id
         now = utc_now_epoch()
         # No parents → `ready` (runs now). With parents → `todo` until they finish.
         status = "todo" if parents else "ready"

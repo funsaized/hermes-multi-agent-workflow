@@ -113,9 +113,14 @@ When the route card fires, read the classifier value the classifier lane emitted
 item. If the path is `auto` (e.g. `shelve`), close out — no proposal.
 
 ### 6. Prep + propose (engine returns ordered prep specs)
-Call `TriageEngine.prep_specs(slug, path)`, create the returned cards in order,
-and parent each card after the first to its predecessor. The engine does not add
-those parent links. When prep finishes, draft the proposal using the path's
+Apply the engine specs through the deterministic adapter:
+```
+python pre_gate_actions.py <slug> --route-task "$HERMES_KANBAN_TASK"
+```
+Never create prep cards yourself. The adapter resolves each abstract
+`TaskSpec.role` through `spec.assignee(config)`, preserves its workspace, creates
+the linear parent chain, and makes retries idempotent. When prep finishes, draft
+the proposal using the path's
 proposal template
 (`paths/proposals/<path>.md`), set item `status: awaiting_approval`, and **send it
 to the human** — you MUST actually deliver it:

@@ -581,20 +581,19 @@ Evidence: `engine/scaffold.py`, `engine/hermes_preflight.py`,
 `docs/07-runbook.md`, `handoffs/impl-a.md`, `handoffs/impl-b.md`,
 `handoffs/impl-c.md`.
 
-### P0 — The full pre-gate DAG is not actually constructed by code
+### P0 — The full pre-gate DAG is only partly constructed by code
 
 `research_specs()` returns evidence cards and `classifier_spec()` returns their
 fan-in; the route card is still manually created by the orchestrator skill.
-`prep_specs()` returns ordered specs, but each
-spec has empty parents; it does not encode the chain. No implemented adapter
-turns those specs into a linked pre-gate DAG. Only post-gate approval has concrete
-card-creation code.
+`pre_gate_actions.py` now applies the ordered `prep_specs()` as a linked chain,
+resolving configured roles to profiles and preserving each exact workspace.
+Route-card creation and root completion remain model-applied transitions.
 
-The system therefore relies on a model correctly improvising deterministic board
-mechanics—the exact behavior the “fat engine, thin skill” design intends to avoid.
+The adapter removes model improvisation from prep-chain mechanics, but the earlier
+root and route transitions still rely on the model.
 
 Evidence: `engine/engine.py:97-123`, `engine/engine.py:132-179`,
-`skills/templates/triage-orchestrator/SKILL.md:58-74`.
+`pre_gate_actions.py`, `skills/templates/triage-orchestrator/SKILL.md`.
 
 ### P0 — Root-task completion semantics are ambiguous
 
@@ -684,7 +683,7 @@ spec shape, persistent fulfillment workspaces, and role mapping. They do not tes
 - item vault round trips;
 - actual Kanban card creation/promotion;
 - `proposal_actions.py` against a disposable real board;
-- prep-chain wiring;
+- the prep-chain adapter against a disposable real board;
 - human reply routing;
 - profile dispatch;
 - cron execution;

@@ -83,7 +83,8 @@ maps it to a path name; the orchestrator writes `path: <name>` on the item. An
 ## Stages 6–7 — Prep + propose
 
 `TriageEngine.prep_specs(slug, path)` returns ordered pre-gate specs with no
-parent links. The orchestrator must create and link them sequentially. When that
+parent links. `pre_gate_actions.py` resolves abstract roles to configured
+profiles and creates the chain idempotently. When that
 caller-managed chain finishes, it drafts the proposal from
 `paths/proposals/<path>.md`, sets
 `status: awaiting_approval`, and **sends it**.
