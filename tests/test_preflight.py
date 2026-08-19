@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import io
 from pathlib import Path
+import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
@@ -200,6 +201,12 @@ class PreflightTests(unittest.TestCase):
     def test_permission_error_is_returned_as_a_structured_runner_failure(self, _run):
         result = SubprocessCommandRunner().run(("hermes", "--version"))
         self.assertEqual(result, CommandResult(126, "", "executable not runnable"))
+
+    def test_runner_survives_non_utf8_output(self):
+        result = SubprocessCommandRunner().run(
+            (sys.executable, "-c", "import sys; sys.stdout.buffer.write(bytes([0x8d]))")
+        )
+        self.assertEqual(result, CommandResult(0, "\ufffd", ""))
 
     def test_description_mismatch_and_disabled_toolset_are_reported(self):
         class DriftRunner(FakeRunner):
