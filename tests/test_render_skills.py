@@ -63,7 +63,9 @@ class SkillMaterializationTests(unittest.TestCase):
             self.assertIn("Do not inspect the\nKanban SQLite database directly", orchestrator_text)
             self.assertIn("Never\nshell to `hermes kanban`", orchestrator_text)
             self.assertIn("as the `parents` array", orchestrator_text)
-            self.assertIn("do not experiment with CLI\nparent syntax", orchestrator_text)
+            self.assertIn("classifier_spec(slug, evidence_ids)", orchestrator_text)
+            self.assertIn("parented only to the classifier", orchestrator_text)
+            self.assertIn("persistent project workspace", orchestrator_text)
             self.assertNotIn("TODO", orchestrator_text)
             self.assertNotIn("{{", orchestrator_text)
 

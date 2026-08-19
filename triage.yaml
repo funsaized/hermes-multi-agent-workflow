@@ -35,6 +35,8 @@ hermes:
   gateway_profile: default
   project_root: .
   profile_strategy: clone
+  # Cap live provider calls while preserving the board's queued fan-out.
+  max_spawn: 3
   profiles:
     default:
       description: "Owns Skills Map triage state, routing, delivery, and the Discord human gate."
@@ -192,8 +194,8 @@ rubric:
 #
 # `guide` is a generic optional mechanism: the engine inlines the reviewed file
 # into every lane card so a lane name becomes an explicit evidence/output
-# contract. All lanes still run in parallel under one role. The classifier emits
-# exactly one `recommended_format` value consumed by the route map.
+# contract. Five evidence lanes run in parallel; the classifier waits for all
+# five and emits the `recommended_format` value consumed by the route map.
 # ---------------------------------------------------------------------------
 research_lanes:
   role: researcher

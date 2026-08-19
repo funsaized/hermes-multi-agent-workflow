@@ -49,6 +49,7 @@ def config_data() -> dict:
             "gateway_profile": "orchestrator",
             "project_root": ".",
             "profile_strategy": "clone",
+            "max_spawn": 3,
             "profiles": {
                 "orchestrator": {
                     "description": "Routes work and handles the human gate.",
@@ -185,6 +186,7 @@ class DeploymentPlannerTests(unittest.TestCase):
         self.assertIn(("hermes", "-p", "scout", "tools", "enable", "web", "file", "kanban", "--platform", "cli"), commands)
         self.assertIn(("hermes", "-p", "scout", "tools", "enable", "web", "file", "kanban", "--platform", "cron"), commands)
         self.assertIn(("hermes", "-p", "orchestrator", "config", "set", "kanban.dispatch_in_gateway", "true"), commands)
+        self.assertIn(("hermes", "-p", "orchestrator", "config", "set", "kanban.max_spawn", "3"), commands)
         self.assertIn(("hermes", "-p", "scout", "config", "set", "kanban.dispatch_in_gateway", "false"), commands)
         cron = next(command for command in commands if command[:5] == ("hermes", "-p", "scout", "cron", "create"))
         self.assertEqual(cron[5], "15 * * * *")

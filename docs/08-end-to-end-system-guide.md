@@ -268,12 +268,12 @@ triage/root completed ├─ prior_context ────────────�
                                            classifier
 ```
 
-Each lane is independent and can run concurrently. The route task depends on all
-lane cards, so Kanban promotes it only after every parent is done. This is the
-core fan-out/fan-in pattern.
+The evidence lanes run concurrently. The classifier depends on all evidence
+cards, and route depends on the classifier. This is the core fan-out/fan-in
+pattern without asking a parallel sibling to synthesize unavailable results.
 
-`TriageEngine.research_specs()` creates lane specs and marks the classifier lane’s
-contract in its task body.
+`TriageEngine.research_specs()` creates evidence specs;
+`TriageEngine.classifier_spec()` creates their downstream synthesizer.
 
 Evidence: `engine/engine.py:95-123`.
 
@@ -583,8 +583,9 @@ Evidence: `engine/scaffold.py`, `engine/hermes_preflight.py`,
 
 ### P0 — The full pre-gate DAG is not actually constructed by code
 
-`research_specs()` returns only lane cards. The route fan-in card is manually
-created by the orchestrator skill. `prep_specs()` returns ordered specs, but each
+`research_specs()` returns evidence cards and `classifier_spec()` returns their
+fan-in; the route card is still manually created by the orchestrator skill.
+`prep_specs()` returns ordered specs, but each
 spec has empty parents; it does not encode the chain. No implemented adapter
 turns those specs into a linked pre-gate DAG. Only post-gate approval has concrete
 card-creation code.

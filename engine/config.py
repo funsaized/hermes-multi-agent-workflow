@@ -98,7 +98,7 @@ class PathDef:
 @dataclass
 class ResearchLanes:
     profile_role: str                # role the lanes run under (usually "researcher")
-    lanes: list[str]                 # parallel lane task titles; all must finish before route
+    lanes: list[str]                 # evidence lanes plus one downstream classifier lane
     classifier_lane: str             # the lane whose output the router reads
     guide: str | None = None         # optional shared lane instructions inlined into each task
 
@@ -144,6 +144,7 @@ class HermesDeployment:
     gateway_profile: str
     project_root: str
     profile_strategy: str
+    max_spawn: int | None
     profiles: dict[str, HermesProfile]
 
 
@@ -268,6 +269,7 @@ class TriageConfig:
                 gateway_profile=gateway_profile,
                 project_root=str(root),
                 profile_strategy="clone",
+                max_spawn=None,
                 profiles=profiles,
             )
         else:
@@ -299,6 +301,7 @@ class TriageConfig:
                 gateway_profile=str(hermes_d.get("gateway_profile", "")),
                 project_root=str(resolved_root),
                 profile_strategy=str(hermes_d.get("profile_strategy", "")),
+                max_spawn=(int(hermes_d["max_spawn"]) if hermes_d.get("max_spawn") is not None else None),
                 profiles=profiles,
             )
 
@@ -373,6 +376,8 @@ class TriageConfig:
             errors.append(
                 f"hermes.profile_strategy {self.hermes.profile_strategy!r} is unsupported; expected 'clone'."
             )
+        if self.hermes.max_spawn is not None and self.hermes.max_spawn < 1:
+            errors.append("hermes.max_spawn must be a positive integer when set.")
         if not self.hermes.project_root or not Path(self.hermes.project_root).is_absolute():
             errors.append("hermes.project_root must resolve to an absolute path from the config file location.")
         elif not Path(self.hermes.project_root).is_dir():

@@ -39,9 +39,12 @@ class TestAIEngineeringDomain(unittest.TestCase):
 
     def test_research_workers_receive_lane_contract(self):
         engine = TriageEngine(self.cfg)
-        bodies = [spec.body for spec in engine.research_specs("rag-evals", "root")]
+        specs = engine.research_specs("rag-evals", "root")
+        specs.append(engine.classifier_spec("rag-evals", [f"lane-{i}" for i in range(5)]))
+        bodies = [spec.body for spec in specs]
         self.assertTrue(all("# Research lane guide" in body for body in bodies))
         self.assertTrue(any("recommended_format" in body for body in bodies))
+        self.assertTrue(all(spec.workspace_kind == "dir" for spec in specs))
 
     def test_fulfillment_paths_are_persistent(self):
         engine = TriageEngine(self.cfg)

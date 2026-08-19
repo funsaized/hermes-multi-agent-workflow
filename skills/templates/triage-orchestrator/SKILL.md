@@ -28,7 +28,7 @@ operate on board `{{BOARD}}`.
 This is a dispatcher-spawned worker: use the injected `kanban_create`,
 `kanban_show`, `kanban_list`, `kanban_link`, and `kanban_complete` tools. Never
 shell to `hermes kanban`, query `kanban.db`, or create probe/test cards. For
-fan-in, pass every lane id in one `kanban_create` call as the `parents` array.
+fan-in, pass every required parent id in one `kanban_create` call as the `parents` array.
 
 ## Trigger
 
@@ -39,7 +39,7 @@ path to a scout report.
 
 - `intake:` — run steps 1–4 and build the complete pre-research graph.
 - `triage:` — this is a release barrier, not a second orchestrator pass. Verify
-  that its six lane children and their single route fan-in already exist, create
+  that its five evidence lanes, classifier fan-in, and route card already exist, create
   nothing, then complete this current task to release the lanes.
 - `route:` — run steps 5–6 only. Never repeat intake, scoring, or fan-out.
 
@@ -79,14 +79,16 @@ That parent edge keeps the root in `todo` while you build the graph, so the
 gateway cannot dispatch a second orchestrator into a half-built graph. Give its
 body the `triage:` release-barrier instructions above.
 
-Create the research lane cards exactly from
-`TriageEngine.research_specs(slug, triage_id)` — they run in parallel, all
-parented to the triage root. Do not inherit `triage-orchestrator` into lane
-cards; omit `skills` unless a generated spec explicitly requires one. Create a
-single `route` card parented to ALL lanes so it fires when the last lane finishes
-(fan-in), assigned back to your profile with `triage-orchestrator`. Use
-`kanban_create` with `parents: [<lane-id>, ...]`; do not experiment with CLI
-parent syntax or create temporary cards.
+Create the five evidence cards exactly from
+`TriageEngine.research_specs(slug, triage_id)`; they run in parallel under the
+triage root. Collect their ids, then call
+`TriageEngine.classifier_spec(slug, evidence_ids)` and create that classifier
+card with all five evidence ids as parents. Finally create one `route` card
+parented only to the classifier. Give every evidence, classifier, and route card
+the persistent project workspace `dir:{{PROJECT_ROOT}}`. Do not inherit
+`triage-orchestrator` into research cards; only the route card receives it.
+Use one `kanban_create` call with the complete `parents` array for each fan-in;
+do not experiment with CLI parent syntax or create temporary cards.
 
 Every create call must use a retry-safe idempotency key scoped to the current
 intake task: `triage:<intake-id>:<slug>`,
@@ -96,9 +98,9 @@ return an existing active same-run card. Archived cards are historical evidence,
 never an active graph and never a reason to skip a candidate. Do not inspect the
 Kanban SQLite database directly; use the injected `kanban_*` tools.
 
-After every qualifying candidate's triage root, six lanes, and route card exist,
+After every qualifying candidate's triage root, five evidence lanes, classifier, and route card exist,
 complete the current `intake:` task. Each triage root then promotes and completes
-itself in release-barrier mode, releasing its six lanes together. A worker may
+itself in release-barrier mode, releasing its five evidence lanes together. A worker may
 only complete its own task; never try to complete a child task id.
 
 ### 5. Route (deterministic — call the engine)

@@ -36,12 +36,13 @@ no polling:
 
 - The research lane specs are all parented to the triage card. They become
   runnable together only after that parent is marked `done`.
-- A `route` card is parented to **all** the lanes → it fires the instant the last
-  lane finishes.
+- A classifier card is parented to all evidence lanes; `route` is parented to
+  the classifier and fires after synthesis finishes.
 - The post-gate fulfillment chain links each stage to the previous → they run in
   order.
 
-`engine.research_specs()` records the supplied root parent on each lane spec.
+`engine.research_specs()` records the supplied root parent on each evidence spec;
+`classifier_spec()` records every evidence task as a parent.
 `engine.fulfillment_specs()` returns ordered specs with empty parents;
 `proposal_actions.py::action_approve` creates those cards and links each later
 stage to its predecessor. No equivalent deterministic pre-gate adapter currently

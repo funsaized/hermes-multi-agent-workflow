@@ -24,6 +24,7 @@ Hermes installation without selecting models, providers, or credentials.
 | `gateway_profile` | Profile that owns the human gate and the sole Kanban dispatcher. It must occur in both `roles:` and `hermes.profiles:`. |
 | `project_root` | Project working directory. A relative path resolves from the selected config file's directory, never the process working directory. It must resolve to an existing directory. |
 | `profile_strategy` | Profile creation strategy. Currently only `clone` is supported. |
+| `max_spawn` | Optional positive live concurrency cap applied to the gateway Kanban dispatcher. |
 | `profiles` | Map of Hermes profile name to the metadata below. Every source profile must be present. |
 
 Each `hermes.profiles.<name>` supports:
@@ -89,7 +90,7 @@ LLM mode (recommended) adapts to ANY dimensions. The deterministic heuristic in
 | Key | Meaning |
 |---|---|
 | `role` | Role the lanes run under (mapped via `roles:`). |
-| `lanes[]` | Parallel lane task titles. All must finish before route fires. |
+| `lanes[]` | Evidence lane titles plus the classifier lane named below. Evidence runs in parallel; classifier runs after it. |
 | `classifier_lane` | Which lane emits the value the router reads. Must be one of `lanes`. |
 | `guide` | Optional Markdown file inlined into every lane task. Use it to define lane-specific questions, evidence standards, and output contracts while preserving string-only lane definitions. |
 

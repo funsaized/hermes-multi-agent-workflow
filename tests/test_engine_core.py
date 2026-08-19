@@ -112,13 +112,15 @@ class TestRouting(unittest.TestCase):
 
 
 class TestEngineSpecs(unittest.TestCase):
-    def test_research_specs_parallel_under_triage(self):
+    def test_research_specs_fan_into_classifier(self):
         engine = TriageEngine(make_config())
         specs = engine.research_specs("my-slug", "t_root")
-        self.assertEqual(len(specs), 2)
-        for s in specs:
-            self.assertEqual(s.parents, ["t_root"])  # all parented to triage → run in parallel
-        self.assertTrue(any("CLASSIFIER" in s.body for s in specs))  # classifier lane flagged
+        self.assertEqual([s.title for s in specs], ["verify: my-slug"])
+        self.assertEqual(specs[0].parents, ["t_root"])
+        self.assertEqual(specs[0].workspace_kind, "dir")
+        classifier = engine.classifier_spec("my-slug", ["t_verify"])
+        self.assertEqual(classifier.parents, ["t_verify"])
+        self.assertIn("CLASSIFIER", classifier.body)
 
     def test_research_specs_inline_optional_guide(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -130,8 +132,10 @@ class TestEngineSpecs(unittest.TestCase):
                 "classifier_lane": "audit",
                 "guide": str(guide),
             })
-            specs = TriageEngine(cfg).research_specs("my-slug", "t_root")
+            engine = TriageEngine(cfg)
+            specs = engine.research_specs("my-slug", "t_root")
             self.assertTrue(all("Follow only the section" in spec.body for spec in specs))
+            self.assertIn("Follow only the section", engine.classifier_spec("my-slug", ["t_verify"]).body)
 
     def test_fulfillment_specs_persistent_workspace(self):
         engine = TriageEngine(make_config())

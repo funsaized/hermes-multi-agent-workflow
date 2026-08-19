@@ -95,12 +95,24 @@ class TriageEngine:
     # ----- stage 4: research fan-out ----- #
 
     def research_specs(self, slug: str, triage_task_id: str) -> list[TaskSpec]:
-        """Parallel research lanes, all parented to the triage task.
+        """Parallel evidence lanes, excluding the downstream classifier."""
+        return [
+            self._research_spec(slug, lane, [triage_task_id])
+            for lane in self.config.research.lanes
+            if lane != self.config.research.classifier_lane
+        ]
 
-        The caller must create the lane cards, complete/release their parent, and
-        separately create a route card parented to every lane. This method does
-        not construct that fan-in card or define root-task completion semantics.
-        """
+    def classifier_spec(self, slug: str, evidence_task_ids: list[str]) -> TaskSpec:
+        """Classifier fan-in that runs only after every evidence lane."""
+        if not evidence_task_ids:
+            raise ValueError("classifier requires at least one evidence task")
+        return self._research_spec(
+            slug, self.config.research.classifier_lane, evidence_task_ids, classifier=True
+        )
+
+    def _research_spec(
+        self, slug: str, lane: str, parents: list[str], *, classifier: bool = False
+    ) -> TaskSpec:
         role = self.config.research.profile_role
         guide = ""
         if self.config.research.guide:
@@ -112,26 +124,26 @@ class TriageEngine:
                 if guide_path.exists()
                 else f"\n\n--- RESEARCH LANE GUIDE: referenced {rel} but file is MISSING. ---\n"
             )
-        specs: list[TaskSpec] = []
-        for lane in self.config.research.lanes:
-            classifier_note = ""
-            if lane == self.config.research.classifier_lane:
-                vals = sorted(self.config.route.map)
-                classifier_note = (
-                    f"\n\nThis lane is the CLASSIFIER. On completion, return the routing "
-                    f"value as `{self.config.route.classifier}` — one of: {vals}."
-                )
-            specs.append(TaskSpec(
-                title=f"{lane}: {slug}",
-                body=(
-                    f"Research lane `{lane}` for item `{slug}`.\n"
-                    f"Read the item file, do the lane's research, report findings."
-                    f"{classifier_note}{guide}"
-                ),
-                role=role,
-                parents=[triage_task_id],
-            ))
-        return specs
+        classifier_note = ""
+        if classifier:
+            vals = sorted(self.config.route.map)
+            classifier_note = (
+                f"\n\nThis lane is the CLASSIFIER and runs after all evidence lanes. "
+                f"Read their parent results and return `{self.config.route.classifier}` "
+                f"as one of: {vals}."
+            )
+        return TaskSpec(
+            title=f"{lane}: {slug}",
+            body=(
+                f"Research lane `{lane}` for item `{slug}`.\n"
+                f"Read the item file, do the lane's research, report findings."
+                f"{classifier_note}{guide}"
+            ),
+            role=role,
+            parents=parents,
+            workspace_kind="dir",
+            workspace_path=str(Path(self.config.hermes.project_root).resolve()),
+        )
 
     # ----- stage 5: route ----- #
 

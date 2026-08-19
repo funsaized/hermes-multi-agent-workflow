@@ -210,6 +210,15 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
             profile=gateway,
         )
     )
+    if cfg.hermes.max_spawn is not None:
+        steps.append(
+            CommandStep(
+                phase="cron",
+                description=f"Cap concurrent Kanban workers at {cfg.hermes.max_spawn}.",
+                argv=("hermes", "-p", gateway, "config", "set", "kanban.max_spawn", str(cfg.hermes.max_spawn)),
+                profile=gateway,
+            )
+        )
     cron_profiles = {
         name for name, profile in cfg.hermes.profiles.items() if profile.owns_cron
     }
