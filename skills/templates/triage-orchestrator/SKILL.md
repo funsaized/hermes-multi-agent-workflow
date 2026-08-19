@@ -77,7 +77,10 @@ Write `score` / `score_breakdown` to the item file regardless of outcome.
 On an `intake:` task, create one triage root parented to the current intake task.
 That parent edge keeps the root in `todo` while you build the graph, so the
 gateway cannot dispatch a second orchestrator into a half-built graph. Give its
-body the `triage:` release-barrier instructions above.
+body the `triage:` release-barrier instructions above. Immediately append that
+triage task id to the item's `linked_kanban_tasks` frontmatter and save the item;
+this is the durable audit link used by gate actions. Do this before creating any
+lane cards.
 
 Create the five evidence cards exactly from
 `TriageEngine.research_specs(slug, triage_id)`; they run in parallel under the

@@ -102,8 +102,6 @@ def action_approve(slug: str) -> dict[str, Any]:
     if path_name not in config.paths:
         die_state(f"Item {slug} has invalid `path`: {path_name!r}. Known: {sorted(config.paths)}.")
     triage_id = first_linked_task(fm)
-    if not triage_id:
-        die_state(f"Item {slug} has no `linked_kanban_tasks` root task.")
 
     specs = engine.fulfillment_specs(slug, path_name)
     if not specs:
@@ -136,8 +134,9 @@ def action_approve(slug: str) -> dict[str, Any]:
             prev_id = task_id
 
         chain_desc = " → ".join(f"`{c['title']}`" for c in created)
-        store.comment(conn, triage_id, author="human",
-                      body=f"✅ Approved. Spawned {path_name} chain: {chain_desc} (first: `{created[0]['task_id']}`).")
+        if triage_id:
+            store.comment(conn, triage_id, author="human",
+                          body=f"✅ Approved. Spawned {path_name} chain: {chain_desc} (first: `{created[0]['task_id']}`).")
         conn.commit()
     finally:
         conn.close()

@@ -57,7 +57,8 @@ all parented to the supplied triage id. `classifier_spec(slug, evidence_ids)`
 returns a classifier parented to every evidence lane; the route card is parented
 to that classifier. All use the project `dir` workspace so they can read the
 vault and domain files. The intake orchestrator creates that triage root parented
-to its current intake card before creating this graph. This keeps the root in `todo` until the graph
+to its current intake card, immediately records its id in the item's
+`linked_kanban_tasks`, then creates this graph. This keeps the root in `todo` until the graph
 is complete and prevents a second orchestrator from racing the fan-out. Once the
 intake completes, the triage worker verifies the existing graph, creates nothing,
 and completes itself to release the evidence lanes together. Hermes workers may only
@@ -106,6 +107,9 @@ The human replies (verbs from `gate:`). The orchestrator shells to
 
 On `approve`, `proposal_actions.py` reads `paths.<path>.fulfill` and spawns the
 chain via `TriageEngine.fulfillment_specs()`.
+
+- The triage-root link is audit metadata used for the approval comment. A missing
+  link no longer blocks an otherwise valid approval or fulfillment chain.
 
 - ⚠️ **Gotcha — persistent workspace.** Every fulfillment stage runs with
   `workspace_kind="dir"` pointed at the SAME `work/<subdir>/<slug>/`. Scratch

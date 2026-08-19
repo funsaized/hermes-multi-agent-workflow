@@ -59,7 +59,8 @@ yet fully enforced by deterministic code.
 3. `research_specs()` returns evidence specs parented to a supplied root id;
    `classifier_spec()` returns their downstream fan-in. The
    intake orchestrator creates that triage root parented to its current intake
-   card, then creates a **route** card parented to the classifier. The parent edge
+   card, records its id in the item, then creates a **route** card parented to
+   the classifier. The parent edge
    keeps the triage root undispatchable until the full graph exists. After the
    intake completes, the triage worker only verifies the graph and completes
    itself to release the lanes. This release step is model-applied because

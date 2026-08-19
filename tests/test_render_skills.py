@@ -57,6 +57,7 @@ class SkillMaterializationTests(unittest.TestCase):
             self.assertIn("parent each card after the first to its predecessor", orchestrator_text)
             self.assertIn("triage:<intake-id>:<slug>", orchestrator_text)
             self.assertIn("parented to the current intake task", orchestrator_text)
+            self.assertIn("linked_kanban_tasks` frontmatter", orchestrator_text)
             self.assertIn("A worker may\nonly complete its own task", orchestrator_text)
             self.assertIn("must never\ncreate research cards", orchestrator_text)
             self.assertIn("Archived cards are historical evidence", orchestrator_text)
