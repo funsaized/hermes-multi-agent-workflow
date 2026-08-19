@@ -173,6 +173,10 @@ class DeploymentPlannerTests(unittest.TestCase):
             ("hermes", "kanban", "boards", "create", "test-board", "--name", "test pipeline", "--description", "Dedicated board for the test pipeline pipeline.", "--default-workdir", root),
             commands,
         )
+        create_index = commands.index(
+            ("hermes", "kanban", "boards", "create", "test-board", "--name", "test pipeline", "--description", "Dedicated board for the test pipeline pipeline.", "--default-workdir", root)
+        )
+        self.assertEqual(commands[create_index + 1], ("hermes", "kanban", "boards", "switch", "test-board"))
         self.assertIn(
             ("hermes", "profile", "create", "scout", "--clone-from", "default", "--no-alias", "--description", "Scheduled web scout."),
             commands,

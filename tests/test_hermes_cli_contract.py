@@ -25,7 +25,7 @@ def command_contracts(cfg: TriageConfig) -> dict[tuple[str, ...], set[str]]:
         command: list[str] = []
         for token in argv:
             if token.startswith("-") or command and token not in {
-                "boards", "create", "set", "enable", "install"
+                "boards", "create", "switch", "set", "enable", "install"
             }:
                 break
             command.append(token)
@@ -41,6 +41,7 @@ class PlannerContractExtractionTests(unittest.TestCase):
             set(contracts),
             {
                 ("kanban", "boards", "create"),
+                ("kanban", "boards", "switch"),
                 ("profile", "create"),
                 ("config", "set"),
                 ("tools", "enable"),

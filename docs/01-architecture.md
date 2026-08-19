@@ -57,9 +57,13 @@ yet fully enforced by deterministic code.
    (judgment, validated by the engine), and — if it clears the bar — creates a
    triage card plus the **research fan-out** (`engine.research_specs`).
 3. `research_specs()` returns lane specs parented to a supplied root id. The
-   orchestrator skill tells the caller to create a **route** card parented to all
-   lanes, then complete the root to release the lanes; the engine itself does
-   neither today.
+   intake orchestrator creates that triage root parented to its current intake
+   card, then creates a **route** card parented to all lanes. The parent edge
+   keeps the triage root undispatchable until the full graph exists. After the
+   intake completes, the triage worker only verifies the graph and completes
+   itself to release the lanes. This release step is model-applied because
+   Hermes workers may only complete their own task id; the engine creates
+   neither the route card nor the board transitions today.
 4. The orchestrator reads the classifier's output and calls `engine.route()` to
    pick a path. `engine.prep_specs()` returns ordered specs, but the caller must
    create and link them into the **prep** chain.

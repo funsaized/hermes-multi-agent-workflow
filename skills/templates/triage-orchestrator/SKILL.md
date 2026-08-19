@@ -25,10 +25,26 @@ All commands below run from `{{PROJECT_ROOT}}` with `triage.yaml` present and
 operate on board `{{BOARD}}`.
 `TRIAGE_CONFIG`, `TRIAGE_VAULT_DIR`, and `HERMES_KANBAN_DB` are honored.
 
+This is a dispatcher-spawned worker: use the injected `kanban_create`,
+`kanban_show`, `kanban_list`, `kanban_link`, and `kanban_complete` tools. Never
+shell to `hermes kanban`, query `kanban.db`, or create probe/test cards. For
+fan-in, pass every lane id in one `kanban_create` call as the `parents` array.
+
 ## Trigger
 
 A new `intake` task assigned to you appears on the triage board. Its body is a
 path to a scout report.
+
+## Task modes (dispatch safety)
+
+- `intake:` — run steps 1–4 and build the complete pre-research graph.
+- `triage:` — this is a release barrier, not a second orchestrator pass. Verify
+  that its six lane children and their single route fan-in already exist, create
+  nothing, then complete this current task to release the lanes.
+- `route:` — run steps 5–6 only. Never repeat intake, scoring, or fan-out.
+
+Do not infer a different mode. In particular, a `triage:` worker must never
+create research cards; doing so races the `intake:` worker and duplicates work.
 
 ## Procedure
 
@@ -58,13 +74,32 @@ Write `score` / `score_breakdown` to the item file regardless of outcome.
 `TriageEngine.score_heuristic(candidate)` — see engine/scoring.py.)
 
 ### 4. Research fan-out (engine returns specs; you create the cards)
-Create one triage root task, then create the research lane cards from
+On an `intake:` task, create one triage root parented to the current intake task.
+That parent edge keeps the root in `todo` while you build the graph, so the
+gateway cannot dispatch a second orchestrator into a half-built graph. Give its
+body the `triage:` release-barrier instructions above.
+
+Create the research lane cards exactly from
 `TriageEngine.research_specs(slug, triage_id)` — they run in parallel, all
-parented to the triage task. Create a single `route` card parented to ALL lanes
-so the kernel fires it the instant the last lane finishes (fan-in). Assign the
-`route` card back to yourself. After every lane and the route card exist, mark the
-triage root `done`; that releases all lanes together. Do not leave the root open,
-or every lane remains `todo` forever.
+parented to the triage root. Do not inherit `triage-orchestrator` into lane
+cards; omit `skills` unless a generated spec explicitly requires one. Create a
+single `route` card parented to ALL lanes so it fires when the last lane finishes
+(fan-in), assigned back to your profile with `triage-orchestrator`. Use
+`kanban_create` with `parents: [<lane-id>, ...]`; do not experiment with CLI
+parent syntax or create temporary cards.
+
+Every create call must use a retry-safe idempotency key scoped to the current
+intake task: `triage:<intake-id>:<slug>`,
+`research:<intake-id>:<slug>:<lane>`, and `route:<intake-id>:<slug>`.
+Always issue those creates for the current intake and trust Hermes idempotency to
+return an existing active same-run card. Archived cards are historical evidence,
+never an active graph and never a reason to skip a candidate. Do not inspect the
+Kanban SQLite database directly; use the injected `kanban_*` tools.
+
+After every qualifying candidate's triage root, six lanes, and route card exist,
+complete the current `intake:` task. Each triage root then promotes and completes
+itself in release-barrier mode, releasing its six lanes together. A worker may
+only complete its own task; never try to complete a child task id.
 
 ### 5. Route (deterministic — call the engine)
 When the route card fires, read the classifier value the classifier lane emitted
@@ -105,7 +140,8 @@ configured target
 
 - Narrate one line per decision to the configured gate target so the human has a pulse.
 - Never auto-approve. The gate is real.
-- Only YOU write vault item files and create child tasks. Workers don't fan out.
+- Only an `intake:` orchestrator writes vault items and creates the research
+  graph. `triage:`, `route:`, and lane workers never repeat that fan-out.
 - Be honest in scoring/classification — gaming them wastes the human's one tap
   and produces low-value output.
 - If you hit a missing tool or ambiguous state, block the task with a reason

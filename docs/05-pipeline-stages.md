@@ -53,11 +53,18 @@ human**. This is model-applied behavior, not an engine side effect. Write both
 ## Stage 4 — Research fan-out (engine generates lane specs)
 
 `TriageEngine.research_specs(slug, triage_id)` returns parallel lane specs, all
-parented to the supplied triage id. The orchestrator skill is instructed to
-create them plus a single `route` card parented to all lanes. The skill then tells
-the orchestrator to mark the triage parent `done`, releasing all lanes together.
-The engine does not create that route card or complete the root, so this remains
-model-applied orchestration rather than an engine guarantee.
+parented to the supplied triage id. The intake orchestrator creates that triage
+root parented to its current intake card before creating the lanes and a single
+`route` card parented to all lanes. This keeps the root in `todo` until the graph
+is complete and prevents a second orchestrator from racing the fan-out. Once the
+intake completes, the triage worker verifies the existing graph, creates nothing,
+and completes itself to release all lanes together. Hermes workers may only
+complete their own task id. The engine does not create the route card or apply
+these board transitions, so this remains model-applied orchestration rather than
+an engine guarantee. All graph creates use intake-scoped idempotency keys.
+Archived cards are audit history and never satisfy a new intake graph.
+Dispatcher-spawned orchestrators use injected `kanban_*` tools; cron scouts are
+the only workers that create cards through the Kanban CLI.
 
 - ⚠️ **This is the fan-in pattern** — the route card auto-fires when the last lane
   finishes. No polling. See docs/02.

@@ -91,11 +91,13 @@ hermes kanban boards create <board> \
     --name <display-name> \
     --description '<board purpose>' \
     --default-workdir <abs-path-to-this-repo>
+hermes kanban boards switch <board>
 ```
 
 The `--default-workdir` is what `kanban` will suggest as the worker workspace.
 Setting it to the repo root keeps workers close to `triage.yaml` and
-`engine/`. `--clone-from` does not apply here.
+`engine/`. The gateway dispatcher watches the active board, so creation must be
+followed by `boards switch`. `--clone-from` does not apply here.
 
 ## 4. Create the profiles
 

@@ -519,7 +519,8 @@ installed CLI:
   afterward for cron-owning profiles, `--platform cron`; the opening runtime
   checkpoint requires the read-only cron-surface and toolset-name capability
   checks to pass before a human executes either mutating phase;
-- board creation uses `hermes kanban boards create … --default-workdir <abs>`;
+- board setup uses `hermes kanban boards create … --default-workdir <abs>` then
+  `hermes kanban boards switch <board>` so the gateway dispatches that board;
 - gateway install uses `hermes -p <profile> gateway install --start-now
   --start-on-login`; only the orchestrator keeps
   `kanban.dispatch_in_gateway: true`; cron-owning scout profiles set it

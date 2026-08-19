@@ -97,6 +97,13 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
             ),
         )
     )
+    steps.append(
+        CommandStep(
+            phase="board",
+            description=f"Make {cfg.board!r} the active Kanban board for gateway dispatch.",
+            argv=("hermes", "kanban", "boards", "switch", cfg.board),
+        )
+    )
 
     for name, profile in cfg.hermes.profiles.items():
         if name == cfg.hermes.base_profile:
