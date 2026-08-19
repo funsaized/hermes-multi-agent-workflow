@@ -139,6 +139,12 @@ agent runs on the `cron` platform; an interactive scout runs on `cli`.
 Enable the configured toolsets on both platforms for any profile that needs
 them.
 
+Kanban is a separate lifecycle surface in Hermes 0.20.4, not an advertised
+toolset name. A cron scout uses its configured `terminal` tool to run
+`hermes kanban --board <board> create ... --json` for the initial intake card.
+After dispatch, `HERMES_KANBAN_TASK` causes Hermes to inject `kanban_*` tools
+into the worker automatically; those workers use model tools rather than CLI.
+
 The scaffold reads `hermes.profiles.<name>.toolsets` from `triage.yaml` and
 emits:
 
@@ -344,7 +350,7 @@ their respective gateways being up.
 | Symptom | Cause / fix |
 |---|---|
 | `scaffold` emits a preflight blocker summary to stderr | Run `python -m cli.triage preflight --format json` for evidence. The plan still renders; review it before executing. |
-| Scout runs, no card appears | Scout profile missing a toolset on the `cron` platform. Run `hermes -p <scout> tools list --platform cron` and re-enable missing toolsets (`hermes tools enable … --platform cron`). See step 6. |
+| Scout runs, no card appears | Confirm `terminal`, `file`, and the source toolset are enabled on the `cron` platform. Inspect the scout result for the JSON response from `hermes kanban --board <board> create`; a missing task id means intake failed. |
 | Crons never fire | The owning profile's gateway is not running. Run `hermes -p <scout> gateway status` and `hermes gateway list` to confirm. The job is registered under one profile; the scheduler must tick under that same profile. |
 | Card stuck in `todo` | It has an unfinished parent. Don't parent the first post-gate task to the triage card. |
 | Proposal status set but no DM | Orchestrator didn't `hermes send`; status ≠ delivery (docs/05). |
@@ -352,7 +358,7 @@ their respective gateways being up.
 | Final delivery can't find artifacts | A stage used scratch, not the persistent `dir` workspace. |
 | `gateway start` fails on WSL | Use `hermes -p <profile> gateway run` (foreground). |
 | `gateway install` is invasive on disposable rehearsal | Use `hermes -p <profile> gateway run --foreground` or run the rehearsal with `HERMES_RUN_DISPOSABLE_REHEARSAL=1 python -m unittest tests.integration.test_scaffold_disposable_home -v` (it sanitizes `HOME`/`HERMES_HOME`/`TMPDIR`, refuses mutation unless Hermes discovers an isolation sentinel, and cleans up automatically). |
-| Toolset name rejected by installed Hermes | Track upstream Hermes issue #64494 first; the template intentionally retains `kanban`/`coding` and preflight reports names absent from the installed availability set. If you deliberately choose a local compatibility override, change `hermes.profiles.<name>.toolsets` in `triage.yaml` to runtime-advertised names, document the divergence, and rerun validate/preflight. No silent rename is performed. |
+| Toolset name rejected by installed Hermes | Compare `triage.yaml` with `hermes -p default tools list --platform cli` and `--platform cron`. This adaptation targets Hermes 0.20.4 names, including `code_execution`; it does not configure a `kanban` toolset because cron uses the CLI and dispatched workers receive Kanban tools automatically. |
 | `hermes cron runs <job>` returns empty | Job id wrong or job is paused. `hermes -p <scout> cron list --all` to find the right id. |
 | `hermes gateway list` empty | Gateways not installed yet (`hermes -p <profile> gateway install --start-now --start-on-login`), or you're in a temporary home without sentinel files. |
 

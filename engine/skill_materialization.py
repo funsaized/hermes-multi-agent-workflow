@@ -104,6 +104,7 @@ def _scout_replacements(cfg: TriageConfig, source: Source) -> dict[str, str]:
         "INTAKE_DIR": str(_workspace_root(cfg) / "vault" / "intake"),
         "PROJECT_ROOT": cfg.hermes.project_root,
         "PROFILE": source.profile,
+        "ORCHESTRATOR_PROFILE": cfg.role_to_profile("orchestrator"),
     }
 
 

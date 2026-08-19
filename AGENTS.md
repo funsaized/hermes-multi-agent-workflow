@@ -72,9 +72,11 @@ Follow `docs/04-adapting-to-your-domain.md`. In short:
 
 These cost real debugging in the system this was extracted from. Preserve them:
 
-- **Scout profiles need the `kanban` toolset.** Scouts run via cron (not the
-  dispatcher), so kanban tools aren't auto-enabled. Without it the scout writes a
-  report but silently can't create the intake task.
+- **Cron scouts create the first card through the Kanban CLI.** Scouts run via
+  cron, so `HERMES_KANBAN_TASK` is unset and model-level `kanban_*` tools are not
+  injected. Give the scout `terminal` on the cron surface and use
+  `hermes kanban --board <board> create ... --json`. Workers spawned from that
+  card receive Kanban tools automatically and should use them instead of CLI.
 - **Post-gate stages must use a persistent `dir` workspace, not scratch.** Scratch
   dirs are wiped between tasks, stranding the final delivery step. `engine.py`
   already does this for `fulfill` chains — don't change it to scratch.

@@ -20,11 +20,12 @@ detect** — no dedup/score/route.
   Scout profiles disable it (`kanban.dispatch_in_gateway: false`) so they
   only generate intake cards; the configured gateway profile is the sole dispatcher.
   `python -m cli.triage scaffold` renders all of this.
-- ⚠️ **Gotcha — toolsets on the right execution surface.** Tools are bound to
-  execution surfaces, not profiles. Cron-run scout agents use the `cron`
-  platform; interactive scouts use `cli`. Enable the same toolsets on both
-  platforms or the cron-run scout can write a report but silently fail to
-  create the intake task. The scaffold emits both
+- ⚠️ **Gotcha — cron starts the board through the CLI.** Tools are bound to
+  execution surfaces, not profiles. Cron scouts have no `HERMES_KANBAN_TASK`, so
+  they do not receive the `kanban_*` tools that the dispatcher injects into
+  workers. Enable `terminal` on the scout's `cron` surface and have the scout run
+  `hermes kanban --board <board> create ... --json` after writing its report.
+  The scaffold emits both
   `hermes -p <scout> tools enable … --platform cli` and `--platform cron` for
   cron-owning profiles. Execute the generated cron command only after preflight
   confirms the cron surface and every configured toolset name is available.

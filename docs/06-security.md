@@ -62,8 +62,9 @@ Use `.env.example` (committed, no values) to document required variables.
 ## Operational hardening
 
 - Give each profile the **minimum toolset** for its role. Only the configured
-  gateway needs Discord; scouts need web + `kanban`; workers need only what they build
-  with.
+  gateway needs Discord; cron scouts need web, files, and terminal so they can
+  create the first card through the Kanban CLI. Dispatched workers receive the
+  Kanban model tools automatically and otherwise need only what they build with.
 - Treat `cost_gate_usd` as documentation until you wire
   `scripts/cost_report.py` into orchestration; it is not currently a circuit
   breaker.

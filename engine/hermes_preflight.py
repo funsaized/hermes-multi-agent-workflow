@@ -348,6 +348,7 @@ def run_preflight(cfg: TriageConfig, runner: CommandRunner | None = None) -> Pre
         active = result.returncode == 0 and (
             "gateway service is active" in status
             or "gateway is supervised by" in status
+            or "gateway process running" in status
             or ("service" in status and "loaded" in status and "not loaded" not in status)
         )
         checks.append(_check(f"resource.gateway.{profile}", active, f"Gateway service for profile {profile!r} is active.", f"Gateway service for profile {profile!r} is missing or inactive."))

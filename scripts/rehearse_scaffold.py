@@ -37,12 +37,18 @@ class IsolatedRunner:
         self.env = env
 
     def run(self, argv: tuple[str, ...]) -> CommandResult:
-        result = subprocess.run(argv, text=True, capture_output=True, env=self.env, check=False, timeout=30)
+        result = subprocess.run(
+            argv, text=True, encoding="utf-8", errors="replace",
+            capture_output=True, env=self.env, check=False, timeout=30,
+        )
         return CommandResult(result.returncode, result.stdout, result.stderr)
 
 
 def _run(argv: tuple[str, ...], env: dict[str, str]) -> str:
-    result = subprocess.run(argv, text=True, capture_output=True, env=env, check=False, timeout=30)
+    result = subprocess.run(
+        argv, text=True, encoding="utf-8", errors="replace",
+        capture_output=True, env=env, check=False, timeout=30,
+    )
     if result.returncode:
         raise RuntimeError(
             f"Command failed ({result.returncode}): {' '.join(argv)}\n"
@@ -54,13 +60,22 @@ def _run(argv: tuple[str, ...], env: dict[str, str]) -> str:
 def _isolated_env(home: Path) -> dict[str, str]:
     # Deliberately do not inherit provider keys, HERMES_* overrides, or the real
     # HOME. PATH is the only host-specific input needed to locate the executable.
+    os_home = home / "os-home"
     return {
         "PATH": os.environ.get("PATH", ""),
-        "HOME": str(home / "os-home"),
+        "HOME": str(os_home),
+        "USERPROFILE": str(os_home),
+        "LOCALAPPDATA": str(os_home / "AppData" / "Local"),
         "HERMES_HOME": str(home / "hermes"),
         "NO_COLOR": "1",
         "LANG": os.environ.get("LANG", "C.UTF-8"),
         "TMPDIR": str(home / "tmp"),
+        "TEMP": str(home / "tmp"),
+        "TMP": str(home / "tmp"),
+        "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+        "WINDIR": os.environ.get("WINDIR", ""),
+        "COMSPEC": os.environ.get("COMSPEC", ""),
+        "PATHEXT": os.environ.get("PATHEXT", ""),
     }
 
 
@@ -191,9 +206,10 @@ def run_rehearsal(config: str | Path = "triage.yaml") -> RehearsalReport:
                 raise RuntimeError(f"Disposable profile {profile!r} was not listed.")
             if profile == cfg.hermes.base_profile:
                 continue
-            cwd = _run(("hermes", "-p", profile, "config", "get", "terminal.cwd", "--json"), env)
-            if cfg.hermes.project_root not in cwd:
-                raise RuntimeError(f"Profile {profile!r} has the wrong terminal.cwd: {cwd.strip()}")
+            raw_cwd = _run(("hermes", "-p", profile, "config", "get", "terminal.cwd", "--json"), env)
+            cwd = json.loads(raw_cwd.strip())
+            if Path(cwd).resolve() != Path(cfg.hermes.project_root).resolve():
+                raise RuntimeError(f"Profile {profile!r} has the wrong terminal.cwd: {cwd}")
 
         dispatcher_expectations = {cfg.hermes.gateway_profile: True}
         dispatcher_expectations.update({source.profile: False for source in cfg.sources})

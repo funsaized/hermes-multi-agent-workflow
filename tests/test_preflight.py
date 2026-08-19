@@ -185,7 +185,7 @@ class PreflightTests(unittest.TestCase):
                         ("list", "--platform", "cron"),
                     }
                 ):
-                    lines = [line for line in result.stdout.splitlines() if not line.endswith(" kanban")]
+                    lines = [line for line in result.stdout.splitlines() if not line.endswith(" terminal")]
                     return CommandResult(0, "\n".join(lines), "")
                 return result
 
@@ -195,7 +195,24 @@ class PreflightTests(unittest.TestCase):
         failed = {check.name: check.evidence for check in report.checks if not check.ok}
         self.assertIn("capability.toolset-names.cli", failed)
         self.assertIn("capability.toolset-names.cron", failed)
-        self.assertIn("kanban", failed["capability.toolset-names.cli"])
+        self.assertIn("terminal", failed["capability.toolset-names.cli"])
+
+    def test_windows_gateway_process_status_is_active(self):
+        class WindowsGatewayRunner(FakeRunner):
+            def run(self, argv: tuple[str, ...]) -> CommandResult:
+                if argv == ("hermes", "-p", "default", "gateway", "status"):
+                    return CommandResult(
+                        0,
+                        "Scheduled Task registered: Hermes_Gateway\n"
+                        "Status: Ready\n"
+                        "Gateway process running (PID: 16068)\n",
+                        "",
+                    )
+                return super().run(argv)
+
+        report = run_preflight(CONFIG, WindowsGatewayRunner())
+        gateway = next(check for check in report.checks if check.name == "resource.gateway.default")
+        self.assertTrue(gateway.ok, gateway.evidence)
 
     @patch("engine.hermes_preflight.subprocess.run", side_effect=PermissionError("denied"))
     def test_permission_error_is_returned_as_a_structured_runner_failure(self, _run):

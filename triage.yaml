@@ -38,10 +38,14 @@ hermes:
   profiles:
     default:
       description: "Owns Skills Map triage state, routing, delivery, and the Discord human gate."
-      toolsets: [file, terminal, kanban]
+      # Dispatched Kanban workers receive kanban_* tools automatically from
+      # HERMES_KANBAN_TASK; `kanban` is not an advertised Hermes 0.20.4 toolset.
+      toolsets: [file, terminal]
     webresearch:
       description: "Runs source-specific Skills Map scouts on profile-local cron."
-      toolsets: [web, file, kanban]
+      # Cron starts outside a Kanban task, so scouts use terminal to call the
+      # supported `hermes kanban` CLI when creating the first intake card.
+      toolsets: [web, file, terminal]
       owns_cron: true
     researcher:
       description: "Performs verified research lanes and structured evidence handoffs."
@@ -54,7 +58,7 @@ hermes:
       toolsets: [web, file]
     builder:
       description: "Builds approved local labs and adaptive curriculum navigators."
-      toolsets: [file, terminal, coding]
+      toolsets: [file, terminal, code_execution]
     reviewer:
       description: "Independently verifies claims, learning arcs, and runnable artifacts."
       toolsets: [web, file, terminal]

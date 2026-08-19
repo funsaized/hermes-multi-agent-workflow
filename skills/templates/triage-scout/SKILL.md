@@ -26,9 +26,10 @@ hermes -p {{PROFILE}} chat --skills {{SKILL_NAME}} -q "Run one sweep now, follow
 ## Prerequisite (read once)
 
 This skill runs via **cron, not the dispatcher**, so `HERMES_KANBAN_TASK` is
-unset and kanban tools are NOT auto-enabled. The scout profile MUST list `kanban`
-in its `toolsets:` or `kanban_create` silently does nothing. (The scaffolder sets
-this; verify it.)
+unset and model-level `kanban_*` tools are not injected. Hermes assigns cron and
+scripts to the CLI surface: use the enabled `terminal` tool to create the first
+card with `hermes kanban`. Workers later spawned from that card receive the
+dedicated Kanban model tools automatically and should use those instead of CLI.
 
 ## What to look for
 
@@ -46,16 +47,18 @@ this; verify it.)
 4. Write the full report to:
    `{{INTAKE_DIR}}/<UTC-timestamp>-{{SOURCE_ID}}.md`
    in the format below.
-5. Create ONE intake Kanban task on the triage board:
+5. Reuse the report's UTC timestamp in the title and idempotency key. Create ONE
+   intake task through the CLI and parse the JSON result to confirm success:
 
+   ```text
+   hermes kanban --board "{{BOARD}}" create "intake: {{SOURCE_ID}} <UTC-timestamp>" --body "<absolute report path>" --assignee "{{ORCHESTRATOR_PROFILE}}" --workspace "dir:{{PROJECT_ROOT}}" --created-by "{{PROFILE}}" --skill triage-orchestrator --idempotency-key "intake:{{SOURCE_ID}}:<UTC-timestamp>" --json
    ```
-   kanban_create(
-     board: "{{BOARD}}",
-     title: "intake: {{SOURCE_ID}} <UTC-date>",
-     assignee: "orchestrator",
-     body: "<path to the report file you just wrote>",
-   )   # no parents → lands `ready`; the orchestrator picks it up
-   ```
+
+   No parent means the card lands `ready`. `--workspace` pins the repository so
+   the orchestrator can find the report, config, and engine. On a retry, use the
+   same key; Hermes returns the existing non-archived task instead of duplicating
+   it. If the command fails or its JSON does not contain a task id, report the
+   failure and do not claim intake succeeded.
 
 ## Report format (contract with engine/intake_parser.py)
 
