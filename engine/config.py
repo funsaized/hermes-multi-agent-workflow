@@ -100,6 +100,7 @@ class ResearchLanes:
     profile_role: str                # role the lanes run under (usually "researcher")
     lanes: list[str]                 # parallel lane task titles; all must finish before route
     classifier_lane: str             # the lane whose output the router reads
+    guide: str | None = None         # optional shared lane instructions inlined into each task
 
 
 @dataclass
@@ -210,6 +211,7 @@ class TriageConfig:
             profile_role=research_d.get("role", "researcher"),
             lanes=list(research_d["lanes"]),
             classifier_lane=research_d.get("classifier_lane", research_d["lanes"][-1]),
+            guide=research_d.get("guide"),
         )
         route_d = req("route")
         route = Route(classifier=route_d["classifier"], map=dict(route_d["map"]))

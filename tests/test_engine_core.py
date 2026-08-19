@@ -11,6 +11,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 import sys
+import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -118,6 +119,19 @@ class TestEngineSpecs(unittest.TestCase):
         for s in specs:
             self.assertEqual(s.parents, ["t_root"])  # all parented to triage → run in parallel
         self.assertTrue(any("CLASSIFIER" in s.body for s in specs))  # classifier lane flagged
+
+    def test_research_specs_inline_optional_guide(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            guide = Path(tmp) / "research.md"
+            guide.write_text("Follow only the section matching your lane.", encoding="utf-8")
+            cfg = make_config(research_lanes={
+                "role": "researcher",
+                "lanes": ["verify", "audit"],
+                "classifier_lane": "audit",
+                "guide": str(guide),
+            })
+            specs = TriageEngine(cfg).research_specs("my-slug", "t_root")
+            self.assertTrue(all("Follow only the section" in spec.body for spec in specs))
 
     def test_fulfillment_specs_persistent_workspace(self):
         engine = TriageEngine(make_config())

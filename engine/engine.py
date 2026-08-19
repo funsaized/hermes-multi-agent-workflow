@@ -102,6 +102,16 @@ class TriageEngine:
         not construct that fan-in card or define root-task completion semantics.
         """
         role = self.config.research.profile_role
+        guide = ""
+        if self.config.research.guide:
+            rel = self.config.research.guide
+            guide_path = Path(rel)
+            guide = (
+                f"\n\n--- RESEARCH LANE GUIDE — from {rel} ---\n"
+                f"{guide_path.read_text(encoding='utf-8')}\n"
+                if guide_path.exists()
+                else f"\n\n--- RESEARCH LANE GUIDE: referenced {rel} but file is MISSING. ---\n"
+            )
         specs: list[TaskSpec] = []
         for lane in self.config.research.lanes:
             classifier_note = ""
@@ -116,7 +126,7 @@ class TriageEngine:
                 body=(
                     f"Research lane `{lane}` for item `{slug}`.\n"
                     f"Read the item file, do the lane's research, report findings."
-                    f"{classifier_note}"
+                    f"{classifier_note}{guide}"
                 ),
                 role=role,
                 parents=[triage_task_id],

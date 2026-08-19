@@ -29,7 +29,9 @@ Edit in this order; run `python -m cli.triage validate` after each block.
 4. **`rubric`** — your dimensions, maxes, and threshold. Make the `hint`s concrete;
    the orchestrator scores from them.
 5. **`research_lanes`** — the parallel investigations needed before routing. The
-   `classifier_lane` is the one that emits the routing signal.
+   `classifier_lane` is the one that emits the routing signal. Add an optional
+   `guide` Markdown file when lane names alone do not define sufficient evidence
+   standards and output contracts; its contents are inlined into every lane card.
 6. **`route.map`** — classification value → path name.
 7. **`paths`** — one per route outcome. Define `prep`, `fulfill`, templates,
    workspace bucket, and (where relevant) `scope_rails` / `deliverable_spec`.

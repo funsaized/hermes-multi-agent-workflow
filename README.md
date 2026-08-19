@@ -7,9 +7,10 @@ A reusable skeleton for an intended **autonomous, multi-agent triage pipeline** 
 **one human approval gate**, then **fulfills and delivers** — all coordinated on a
 single Hermes Kanban board.
 
-It ships pre-wired as a worked example (find pain points AI-agent users hit →
-build a fix or make an explainer video), so you can read a complete pipeline and
-then repoint it at your own domain.
+It is currently adapted as a worked example around Andrew Ng's AI Engineering
+Skills Map: find evidence-backed learning gaps for software engineers, research
+them, then produce a brief, explainer, lab, full course, or adaptive curriculum.
+The engine remains generic, so the domain can still be replaced in configuration.
 
 > **This is a template, not a turnkey app.** It runs its unit tests and validates
 > its config out of the box, but going live requires setting up your Hermes

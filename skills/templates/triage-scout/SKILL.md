@@ -39,7 +39,9 @@ this; verify it.)
 1. Search your assigned surface for candidate items matching the query above.
 2. For each distinct candidate, capture: a one-line **claim**, **source URLs**
    (every claim traceable to a primary source), a verbatim quote where possible,
-   and one line on **why it may matter**.
+   and one parseable **why it may matter** line. Put query-required labels on that
+   same line separated by semicolons; the current parser does not consume
+   continuation lines.
 3. Drop low-signal noise — vague hype, single-person rants with no corroboration.
 4. Write the full report to:
    `{{INTAKE_DIR}}/<UTC-timestamp>-{{SOURCE_ID}}.md`
@@ -66,7 +68,7 @@ Claim: <one-line claim>
 Sources:
   - url: https://...
     quote: "verbatim"
-Why it may matter: <one line>
+Why it may matter: <one line; labeled details required by the source query>
 
 ## Candidate: <title>
 ...

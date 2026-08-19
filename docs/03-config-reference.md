@@ -91,6 +91,7 @@ LLM mode (recommended) adapts to ANY dimensions. The deterministic heuristic in
 | `role` | Role the lanes run under (mapped via `roles:`). |
 | `lanes[]` | Parallel lane task titles. All must finish before route fires. |
 | `classifier_lane` | Which lane emits the value the router reads. Must be one of `lanes`. |
+| `guide` | Optional Markdown file inlined into every lane task. Use it to define lane-specific questions, evidence standards, and output contracts while preserving string-only lane definitions. |
 
 ## `route:`
 

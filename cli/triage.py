@@ -49,6 +49,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(f"  ! {warning}")
     # Warn about referenced-but-missing template files (non-fatal).
     missing = []
+    if cfg.research.guide and not Path(cfg.research.guide).exists():
+        missing.append(cfg.research.guide)
     for p in cfg.paths.values():
         for rel in (p.scope_rails, p.deliverable_spec, p.proposal_template):
             if rel and not Path(rel).exists():

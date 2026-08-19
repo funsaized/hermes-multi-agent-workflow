@@ -1,241 +1,324 @@
 # ===========================================================================
-# triage.yaml — the ONE file that defines your pipeline.
+# AI Engineering Skills Map research and curriculum pipeline
 #
-# The engine in engine/ is generic. THIS file is your domain. To adapt the
-# template to your work, you (and your agent) edit this file and the markdown
-# templates it points at — not the Python.
+# Domain policy lives here and in the Markdown files referenced below. The
+# generic engine remains topic-agnostic. This pipeline discovers evidence-backed
+# learning gaps for SOFTWARE ENGINEERS, maps them to Andrew Ng's four AI
+# Engineering Skills Map topics, researches the gap, chooses the smallest useful
+# learning format, pauses at one Discord gate, then produces a reviewed artifact.
 #
-# The values below are a COMPLETE WORKED EXAMPLE: a pipeline that finds pain
-# points AI-agent users hit, then either builds a fix or makes an explainer
-# video. Read it as a reference, then replace it with your domain.
+# A triaged item is NOT a broad topic such as "RAG". It is a narrow transition:
+#   observable current capability -> observable target capability
+# Example: "can build basic RAG" -> "can separate retrieval and generation errors".
 #
-# After editing, validate:  python -m cli.triage validate
-# Full key-by-key docs:     docs/03-config-reference.md
-# How to adapt, step by step: docs/04-adapting-to-your-domain.md
+# Validate after editing:  .venv/Scripts/python -m cli.triage validate
 # ===========================================================================
 
-# A short slug for this pipeline. Used in logs and (optionally) the board name.
-name: ai-agent-pain-points-for-non-technical-users
-
-# The dedicated Hermes Kanban board this pipeline runs on. Keep it isolated from
-# `default` so triage cards don't mix with your other work.
-# Resolves to ~/.hermes/kanban/boards/<board>/kanban.db (or ~/.hermes/kanban.db
-# when board: default).
-board: pain-points-for-noobs
-
-# Where per-item persistent workspaces and the item vault live (relative to repo
-# root, or absolute). Post-gate stages share <workspace_root>/<subdir>/<slug>/.
+name: ai-engineering-skills-map
+board: ai-engineering-learning
 workspace_root: ./work
 
-# Soft per-item LLM-spend threshold (USD) read by scripts/cost_report.py. The
-# current pipeline does not invoke or enforce it automatically.
-cost_gate_usd: 5
+# Soft/manual reporting threshold only. The current engine does not enforce it.
+cost_gate_usd: 10
 
-# --------------------------------------------------------------------------- #
-# HERMES DEPLOYMENT — validated metadata for the side-effect-free scaffolder.
-# Profiles are cloned, but model/provider selection and all credentials remain
-# explicit human checkpoints. `project_root` resolves from this file's location.
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# HERMES DEPLOYMENT
+#
+# Keep the existing default profile as the sole dispatcher and Discord gateway.
+# One webresearch profile owns all four scheduled scouts; separate skills and
+# queries give them distinct source contracts without needless profile sprawl.
+# Roles remain semantically distinct even when two map to the same profile.
+# ---------------------------------------------------------------------------
 hermes:
-    min_version: "0.20.0"
-    base_profile: default
-    # Reuse the already-running root gateway. This avoids two gateways competing
-    # for the same Discord bot token; scout profiles still run their own cron-only
-    # gateways with Kanban dispatch disabled.
-    gateway_profile: default
-    project_root: .
-    profile_strategy: clone
-    profiles:
-        default:
-            description: "Existing root profile; owns triage state, routing, and the Discord human gate."
-            toolsets: [file, terminal, kanban]
-        researcher:
-            description: "Performs source-backed research lanes and structured handoffs."
-            toolsets: [web, file]
-        analyst:
-            description: "Synthesizes research and develops bounded proposals."
-            toolsets: [web, file]
-        builder:
-            description: "Builds only approved artifacts within path scope rails."
-            toolsets: [file, terminal, coding]
-        tester:
-            description: "Independently tests approved artifacts and reports evidence."
-            toolsets: [file, terminal]
-        video_producer:
-            description: "Produces source-backed slides and scripts."
-            toolsets: [web, file]
-        xresearch:
-            description: "Scheduled source scout for X."
-            toolsets: [x_search, file, kanban]
-            owns_cron: true
-        webresearch:
-            description: "Scheduled scout for web, Reddit, and YouTube."
-            toolsets: [web, file, kanban]
-            owns_cron: true
+  min_version: "0.20.0"
+  base_profile: default
+  gateway_profile: default
+  project_root: .
+  profile_strategy: clone
+  profiles:
+    default:
+      description: "Owns Skills Map triage state, routing, delivery, and the Discord human gate."
+      toolsets: [file, terminal, kanban]
+    webresearch:
+      description: "Runs source-specific Skills Map scouts on profile-local cron."
+      toolsets: [web, file, kanban]
+      owns_cron: true
+    researcher:
+      description: "Performs verified research lanes and structured evidence handoffs."
+      toolsets: [web, file]
+    analyst:
+      description: "Maps capabilities, learner states, assessments, and curriculum structure."
+      toolsets: [web, file]
+    author:
+      description: "Writes approved briefs, explainers, and course content."
+      toolsets: [web, file]
+    builder:
+      description: "Builds approved local labs and adaptive curriculum navigators."
+      toolsets: [file, terminal, coding]
+    reviewer:
+      description: "Independently verifies claims, learning arcs, and runnable artifacts."
+      toolsets: [web, file, terminal]
 
-# --------------------------------------------------------------------------- #
-# SOURCES — desired scout deployments. Each entry renders one profile-specific
-# skill and one profile-local cron command; installation remains manual.
-# The profile binds the model (e.g. one scout on Grok, the rest on GPT). The
-# `query` is the domain prompt that tells the scout what to look for.
-# Crons are registered in each source profile's local store (see docs/07-runbook.md).
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# SOURCES / SCOUT TYPES
+#
+# Scouts detect only: they do not dedup, score, or route. Each query requires a
+# narrow capability gap, source URLs, and a mapping to the shared taxonomy in
+# domain/ai-engineering-skills-map.md. Start live operation with `authoritative`
+# only; resume other crons after one complete synthetic and one real cycle.
+# ---------------------------------------------------------------------------
 sources:
-    - id: x
-      profile: xresearch
-      skill: triage-scout-x
-      schedule: "15 * * * *" # hourly at :15
-      query: |
-          Search X for people describing concrete, recent pain using AI coding
-          agents — wasted hours, gave up, broken workflows. Quote them. Skip vague
-          hype. Each find: a one-line claim, source URLs, why it may matter.
-    - id: web
-      profile: webresearch
-      skill: triage-scout-web
-      schedule: "45 * * * *" # hourly at :45 (staggered from X)
-      query: |
-          Search Reddit, YouTube, and the web for AI-agent users describing concrete
-          friction or confusion. Prefer threads with multiple corroborating voices.
+  - id: authoritative
+    profile: webresearch
+    skill: skills-map-scout-authoritative
+    schedule: "15 8 * * 1,4"
+    query: |
+      Search official documentation, technical reports, standards, and primary
+      research for consequential changes in AI engineering practice that create
+      a learning need for software engineers. Map each candidate to exactly one
+      primary Skills Map topic and named subskills from
+      domain/ai-engineering-skills-map.md. Capture an observable current
+      capability, observable target capability, primary URLs, retrieval dates,
+      and why existing learning material may be insufficient. Skip product
+      announcements without an engineering or learning implication.
 
-# --------------------------------------------------------------------------- #
-# ITEM SCHEMA — declarative documentation for fields a scout emits per candidate.
-# The parser contract is fixed in engine/intake_parser.py; this list does not
-# dynamically configure it.
-# --------------------------------------------------------------------------- #
+  - id: practitioner
+    profile: webresearch
+    skill: skills-map-scout-practitioner
+    schedule: "45 8 * * 2,5"
+    query: |
+      Search public engineering blogs, technical conference material,
+      postmortems, and substantial open-source projects for demonstrated AI
+      engineering practices, tradeoffs, and failure lessons. Prefer measured or
+      reproducible evidence over opinion. Express each find as a narrow current-
+      to-target capability gap for software engineers and map it to the shared
+      Skills Map taxonomy.
+
+  - id: community
+    profile: webresearch
+    skill: skills-map-scout-community
+    schedule: "15 9 * * 3,6"
+    query: |
+      Search developer forums, GitHub issues, Reddit, and other public technical
+      discussions for recurring AI engineering learning gaps. Require multiple
+      independent reports or one unusually detailed, source-backed account.
+      Record the observed failure, learner profile, current and target
+      capabilities, relevant Skills Map nodes, and primary URLs. Skip vague hype,
+      engagement bait, and isolated complaints.
+
+  - id: job_market
+    profile: webresearch
+    skill: skills-map-scout-job-market
+    schedule: "45 9 * * 0"
+    query: |
+      Search public job descriptions, competency frameworks, and hiring guidance
+      for recurring AI engineering capabilities expected of software engineers.
+      Extract transferable skills rather than employer-specific tools. Map each
+      candidate to the shared taxonomy and identify evidence of a gap between
+      expected performance and available learning material.
+
+# ---------------------------------------------------------------------------
+# ITEM CONTRACT
+#
+# This list documents the desired candidate model. The current intake parser is
+# fixed to title, claim, sources, and why_it_may_matter. Scouts therefore encode
+# the additional labeled fields inside `Why it may matter` until the parser is
+# generalized; do not pretend these fields are independently validated today.
+# ---------------------------------------------------------------------------
 item_schema:
-    fields:
-        - title
-        - claim
-        - sources
-        - why_it_may_matter
-        - agent_solvable_or_explainable
-        - solution_gap
-        - strategic_fit
+  fields:
+    - title
+    - claim
+    - sources
+    - why_it_may_matter
+    - primary_skill
+    - subskills
+    - learner_profile
+    - assumed_current_capability
+    - target_capability
+    - observed_failure
+    - prerequisite_hypotheses
+    - evidence_type
+    - existing_learning_gap
 
-# --------------------------------------------------------------------------- #
-# DEDUP — don't research the same thing twice. token-cosine is the only backend
-# currently wired; `method` is reserved for a future embedding implementation.
-# --------------------------------------------------------------------------- #
+# Token cosine is the only implemented dedup backend. These colder thresholds
+# suit lexical comparison; `embedding` is not wired despite being accepted.
 dedup:
-    method: token-cosine
-    duplicate_threshold: 0.62 # >= this → duplicate (append source, stop)
-    possible_threshold: 0.40 # >= this → possible dup (flag, continue)
+  method: token-cosine
+  duplicate_threshold: 0.62
+  possible_threshold: 0.40
 
-# --------------------------------------------------------------------------- #
-# RUBRIC — how an item is judged. The orchestrator scores each dimension 0..max
-# (LLM mode), the engine sums and compares to threshold. Edit dimensions/weights
-# freely; LLM mode adapts automatically. (The deterministic heuristic scorer
-# only understands the reference keys — see engine/scoring.py.)
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# VALUE RUBRIC (100 points; LLM judgment, deterministic validation)
+#
+# Advance at 70. Popularity alone cannot pass: the item must describe a useful,
+# assessable learning transition supported by evidence. The old deterministic
+# heuristic knows the example-domain keys and is intentionally not used here.
+# ---------------------------------------------------------------------------
 rubric:
-    threshold: 65 # advance if total >= this (max here is 100)
-    dimensions:
-        - {
-              key: frequency,
-              max: 25,
-              hint: "how many independent sources / how often it recurs",
-          }
-        - {
-              key: intensity,
-              max: 20,
-              hint: "how acute — wasted hours, gave up, blocked",
-          }
-        - {
-              key: agent_solvable_or_explainable,
-              max: 25,
-              hint: "can an agent build a fix OR clearly explain it",
-          }
-        - {
-              key: solution_gap,
-              max: 15,
-              hint: "is there no good existing solution",
-          }
-        - { key: strategic_fit, max: 15, hint: "fit to your domain/audience" }
+  threshold: 70
+  dimensions:
+    - key: engineering_importance
+      max: 20
+      hint: "consequence for designing, building, evaluating, deploying, or safely operating AI-enabled software"
+    - key: evidence_strength
+      max: 15
+      hint: "quality, independence, recency, and provenance of evidence; label vendor-reported results"
+    - key: learning_gap
+      max: 15
+      hint: "extent to which current resources omit prerequisites, practice, feedback, error analysis, or a coherent learning arc"
+    - key: target_capability_clarity
+      max: 15
+      hint: "whether the outcome is an observable engineering behavior rather than broad familiarity"
+    - key: dependency_mappability
+      max: 10
+      hint: "whether the current-to-target transition can be represented as a defensible prerequisite graph"
+    - key: assessment_quality
+      max: 10
+      hint: "whether understanding can be tested through reasoning, prediction, implementation, debugging, or measurement"
+    - key: artifact_actionability
+      max: 10
+      hint: "whether a bounded brief, explainer, lab, course, or adaptive curriculum can close the gap"
+    - key: skills_map_alignment
+      max: 5
+      hint: "strength of mapping to one primary Skills Map topic and named subskills"
 
-# --------------------------------------------------------------------------- #
-# RESEARCH LANES — parallel investigation before routing. All lanes must finish
-# before the route step fires (fan-in). The classifier_lane emits the value the
-# router reads.
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# RESEARCH FAN-OUT
+#
+# `guide` is a generic optional mechanism: the engine inlines the reviewed file
+# into every lane card so a lane name becomes an explicit evidence/output
+# contract. All lanes still run in parallel under one role. The classifier emits
+# exactly one `recommended_format` value consumed by the route map.
+# ---------------------------------------------------------------------------
 research_lanes:
-    role: researcher # which role runs the lanes (mapped via roles:)
-    lanes:
-        - verify_sources # is the pain real, attributable, not one rant?
-        - prior_context # what's already known / related history?
-        - existing_solutions_audit # what already solves this? → emits the classifier
-    classifier_lane: existing_solutions_audit
+  role: researcher
+  guide: paths/specs/research-lanes.md
+  lanes:
+    - verify_sources
+    - map_skill_dependencies
+    - model_target_learner
+    - audit_existing_learning
+    - design_assessment
+    - recommend_learning_format
+  classifier_lane: recommend_learning_format
 
-# --------------------------------------------------------------------------- #
-# ROUTE — map the classifier's value to a path. Every value on the right MUST be
-# a key under `paths:` below. Edit this map to change routing logic — no code.
-# --------------------------------------------------------------------------- #
 route:
-    classifier: existing_solutions_audit.solution_quality
-    map:
-        missing: build
-        broken: build
-        confusing: video
-        poorly_documented: video
-        outdated: video
-        good: shelve
+  classifier: recommend_learning_format.recommended_format
+  map:
+    focused_knowledge_gap: research_brief
+    conceptual_model_gap: explainer
+    applied_skill_gap: hands_on_lab
+    broad_dependency_gap: full_course
+    learner_variability_high: adaptive_curriculum
+    already_covered: shelve
+    insufficient_evidence: shelve
 
-# --------------------------------------------------------------------------- #
-# PATHS — what happens per route outcome. Each path has:
-#   prep:    stages BEFORE the human gate (research synthesis, proposal drafting)
-#   propose: who drafts + sends the proposal, and which template
-#   fulfill: stages AFTER approval (run in a shared persistent workspace)
-#   scope_rails / deliverable_spec: md files inlined into worker task bodies
-#   auto: true → terminal path with no work (e.g. shelve)
-# Roles (analyst, builder, …) are mapped to profiles under `roles:`.
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# FULFILLMENT PATHS
+#
+# Prep happens before the single human gate. Fulfillment happens only after an
+# explicit approval and shares one persistent per-item directory. Every artifact
+# path ends with independent review before the orchestrator performs delivery.
+# The engine has no correction loop: a failed review must block honestly.
+# ---------------------------------------------------------------------------
 paths:
-    build:
-        prep:
-            - { stage: synthesize_problem, role: analyst }
-            - { stage: solution_ideation, role: analyst }
-        propose: { role: orchestrator, template: paths/proposals/build.md }
-        fulfill:
-            - { stage: prototype_build, role: builder }
-            - { stage: test_run, role: tester }
-            - { stage: final_report, role: orchestrator }
-        workspace_subdir: builds
-        scope_rails: paths/rails/build.md
+  research_brief:
+    prep:
+      - { stage: define_learning_transition, role: curriculum_analyst }
+      - { stage: synthesize_verified_evidence, role: curriculum_analyst }
+    propose: { role: orchestrator, template: paths/proposals/research-brief.md }
+    fulfill:
+      - { stage: draft_brief, role: content_author }
+      - { stage: verify_brief, role: reviewer }
+      - { stage: final_delivery, role: orchestrator }
+    workspace_subdir: research-briefs
+    scope_rails: paths/rails/research-brief.md
+    deliverable_spec: paths/specs/research-brief.md
 
-    video:
-        prep:
-            - { stage: tutorial_research, role: video_producer }
-            - { stage: outline, role: video_producer }
-        propose: { role: orchestrator, template: paths/proposals/video.md }
-        fulfill:
-            - { stage: slides_builder, role: video_producer }
-            - { stage: script_writer, role: video_producer }
-            - { stage: final_deliverable, role: orchestrator }
-        workspace_subdir: videos
-        deliverable_spec: paths/specs/video.md
+  explainer:
+    prep:
+      - { stage: identify_blocking_mental_model, role: curriculum_analyst }
+      - { stage: design_explanation_arc, role: content_author }
+    propose: { role: orchestrator, template: paths/proposals/explainer.md }
+    fulfill:
+      - { stage: write_explainer, role: content_author }
+      - { stage: create_visuals, role: visual_author }
+      - { stage: verify_explainer, role: reviewer }
+      - { stage: final_delivery, role: orchestrator }
+    workspace_subdir: explainers
+    scope_rails: paths/rails/explainer.md
+    deliverable_spec: paths/specs/explainer.md
 
-    shelve:
-        auto: true # nothing exists worth building or explaining
+  hands_on_lab:
+    prep:
+      - { stage: define_learning_transition, role: curriculum_analyst }
+      - { stage: design_diagnostic, role: assessment_designer }
+      - { stage: design_lab_sequence, role: lab_builder }
+    propose: { role: orchestrator, template: paths/proposals/hands-on-lab.md }
+    fulfill:
+      - { stage: build_lab, role: lab_builder }
+      - { stage: run_completion_test, role: reviewer }
+      - { stage: review_learning_arc, role: assessment_designer }
+      - { stage: final_delivery, role: orchestrator }
+    workspace_subdir: hands-on-labs
+    scope_rails: paths/rails/hands-on-lab.md
+    deliverable_spec: paths/specs/hands-on-lab.md
 
-# --------------------------------------------------------------------------- #
-# ROLES — map abstract roles (used above) to real Hermes profiles. The
-# scaffolder (cli/triage.py scaffold) can create these profiles for you.
-# --------------------------------------------------------------------------- #
+  full_course:
+    prep:
+      - { stage: define_course_outcomes, role: curriculum_analyst }
+      - { stage: build_dependency_graph, role: curriculum_analyst }
+      - { stage: design_assessment_plan, role: assessment_designer }
+      - { stage: outline_modules, role: course_author }
+    propose: { role: orchestrator, template: paths/proposals/full-course.md }
+    fulfill:
+      - { stage: write_course, role: course_author }
+      - { stage: build_course_labs, role: lab_builder }
+      - { stage: validate_dependency_coverage, role: reviewer }
+      - { stage: run_course_artifacts, role: reviewer }
+      - { stage: final_delivery, role: orchestrator }
+    workspace_subdir: courses
+    scope_rails: paths/rails/full-course.md
+    deliverable_spec: paths/specs/full-course.md
+
+  adaptive_curriculum:
+    prep:
+      - { stage: define_learner_variants, role: curriculum_analyst }
+      - { stage: build_capability_graph, role: curriculum_analyst }
+      - { stage: design_diagnostic_bank, role: assessment_designer }
+      - { stage: define_branching_policy, role: assessment_designer }
+    propose: { role: orchestrator, template: paths/proposals/adaptive-curriculum.md }
+    fulfill:
+      - { stage: build_curriculum_content, role: course_author }
+      - { stage: build_curriculum_navigator, role: lab_builder }
+      - { stage: simulate_learner_paths, role: reviewer }
+      - { stage: final_delivery, role: orchestrator }
+    workspace_subdir: adaptive-curricula
+    scope_rails: paths/rails/adaptive-curriculum.md
+    deliverable_spec: paths/specs/adaptive-curriculum.md
+
+  shelve:
+    auto: true
+
+# Abstract roles keep path intent readable. Several deliberately share a profile;
+# split them only when different models, credentials, or toolsets are necessary.
 roles:
-    orchestrator: default
-    researcher: researcher
-    analyst: analyst
-    builder: builder
-    tester: tester
-    video_producer: video_producer
+  orchestrator: default
+  researcher: researcher
+  curriculum_analyst: analyst
+  assessment_designer: analyst
+  content_author: author
+  course_author: author
+  visual_author: author
+  lab_builder: builder
+  reviewer: reviewer
 
-# --------------------------------------------------------------------------- #
-# GATE — the single human approval point. The orchestrator maps these reply
-# verbs to proposal_actions.py subcommands. Use ordinary text replies; `/approve`
-# is Hermes command-execution approval, not this workflow's proposal action.
-# --------------------------------------------------------------------------- #
+# Preserve the existing Discord definition. Replies are ordinary text; a leading
+# slash would invoke Hermes command approval rather than this proposal gate.
 gate:
-    channel: discord
-    target: discord:1484142557704491119 # Gaymerz / #briefs
-    approve: [approve]
-    shelve: [shelve, "reject the rest"]
-    modify: [modify]
+  channel: discord
+  target: discord:1484142557704491119
+  approve: [approve]
+  shelve: [shelve, "reject the rest"]
+  modify: [modify]

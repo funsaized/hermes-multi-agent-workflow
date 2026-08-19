@@ -123,7 +123,7 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(report.ok, report.render_text())
         self.assertEqual(report.errors, ())
         self.assertTrue(all(check.evidence for check in report.checks))
-        self.assertIn(("hermes", "-p", "xresearch", "tools", "list", "--platform", "cron"), runner.calls)
+        self.assertIn(("hermes", "-p", "webresearch", "tools", "list", "--platform", "cron"), runner.calls)
         self.assertIn(("hermes", "-p", "default", "tools", "list", "--platform", "cron"), runner.calls)
         self.assertIn(("hermes", "-p", "webresearch", "cron", "list", "--all"), runner.calls)
         self.assertIn(("hermes", "-p", "webresearch", "cron", "status"), runner.calls)
@@ -137,7 +137,7 @@ class PreflightTests(unittest.TestCase):
         self.assertFalse(report.ok)
         self.assertTrue(any("0.19.9" in error for error in report.errors))
         self.assertTrue(any(CONFIG.board in error for error in report.errors))
-        self.assertTrue(any("triage-scout-x" in error for error in report.errors))
+        self.assertTrue(any(CONFIG.sources[0].skill in error for error in report.errors))
         self.assertTrue(any("discord:1484142557704491119" in error for error in report.errors))
 
     def test_missing_executable_short_circuits_safely(self):
@@ -214,13 +214,13 @@ class PreflightTests(unittest.TestCase):
                 result = super().run(argv)
                 if argv == ("hermes", "profile", "describe", "builder"):
                     return CommandResult(0, "old description", "")
-                if argv == ("hermes", "-p", "xresearch", "tools", "list", "--platform", "cron"):
-                    return CommandResult(0, "enabled file\nenabled kanban\ndisabled x_search", "")
+                if argv == ("hermes", "-p", "webresearch", "tools", "list", "--platform", "cron"):
+                    return CommandResult(0, "enabled file\nenabled kanban\ndisabled web", "")
                 return result
 
         report = run_preflight(CONFIG, DriftRunner())
         self.assertTrue(any("builder" in error and "description" in error for error in report.errors))
-        self.assertTrue(any("x_search" in error and "cron" in error for error in report.errors))
+        self.assertTrue(any("web" in error and "cron" in error for error in report.errors))
 
     def test_json_and_text_rendering_are_structured_and_redacted(self):
         report = run_preflight(CONFIG, FakeRunner(deployed=False))
