@@ -110,6 +110,7 @@ engine/                  Generic engine (rarely edited)
   intake_parser.py       Parses scout reports
   frontmatter.py         Stdlib YAML-frontmatter for item files
 proposal_actions.py      Human-gate handler (approve/shelve/modify) — config-driven
+scout_actions.py         Config-scoped scout report + intake-card submission
 paths/                   Per-path templates you customize
   rails/   specs/   proposals/
 skills/templates/        Scout + orchestrator SKILL.md templates

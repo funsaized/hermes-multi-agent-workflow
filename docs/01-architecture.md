@@ -51,7 +51,9 @@ yet fully enforced by deterministic code.
 
 ## Data flow of one item
 
-1. A **scout** writes a report and creates an `intake` card (it only detects).
+1. A **scout** submits a draft through `scout_actions.py`; the helper validates
+   it, writes to the config-scoped intake directory, and creates the `intake`
+   card through the Hermes CLI (the scout only detects).
 2. The **orchestrator skill is intended to** parse it, ask the engine for dedup
    matches, score it
    (judgment, validated by the engine), and — if it clears the bar — creates a

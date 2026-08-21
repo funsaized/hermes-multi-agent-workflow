@@ -5,10 +5,10 @@ calling out the hard-won gotchas you must not regress.
 
 ## Stage 1 — Intake (scout)
 
-A scout runs under its source profile's gateway on a schedule, writes a report
-to `<project_root>/work/vault/intake/<ts>-<source>.md`, and creates one `intake`
-card assigned to the orchestrator. The report path carried in the card body is
-authoritative if a deployment customizes `workspace_root`. **Scouts only
+A scout runs under its source profile's gateway on a schedule, writes a draft,
+and submits it through `scout_actions.py`. The helper validates the report,
+derives `<workspace_root>/vault/intake/` from the selected config, writes only
+there, and creates one `intake` card assigned to the orchestrator. **Scouts only
 detect** — no dedup/score/route.
 
 - Code: scout skill template; `engine/intake_parser.py` parses the report.
@@ -24,7 +24,8 @@ detect** — no dedup/score/route.
   execution surfaces, not profiles. Cron scouts have no `HERMES_KANBAN_TASK`, so
   they do not receive the `kanban_*` tools that the dispatcher injects into
   workers. Enable `terminal` on the scout's `cron` surface and have the scout run
-  `hermes kanban --board <board> create ... --json` after writing its report.
+  `scout_actions.py`, which runs `hermes kanban --board <board> create ... --json`
+  after writing the canonical report.
   The scaffold emits both
   `hermes -p <scout> tools enable … --platform cli` and `--platform cron` for
   cron-owning profiles. Execute the generated cron command only after preflight

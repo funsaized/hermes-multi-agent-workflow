@@ -72,9 +72,10 @@ Follow `docs/04-adapting-to-your-domain.md`. In short:
 
 These cost real debugging in the system this was extracted from. Preserve them:
 
-- **Cron scouts create the first card through the Kanban CLI.** Scouts run via
+- **Cron scouts submit through the scoped helper, which uses the Kanban CLI.** Scouts run via
   cron, so `HERMES_KANBAN_TASK` is unset and model-level `kanban_*` tools are not
-  injected. Give the scout `terminal` on the cron surface and use
+  injected. Give the scout `terminal` on the cron surface and require
+  `scout_actions.py`; it derives the intake path from config and runs
   `hermes kanban --board <board> create ... --json`. Workers spawned from that
   card receive Kanban tools automatically and should use them instead of CLI.
 - **Post-gate stages must use a persistent `dir` workspace, not scratch.** Scratch

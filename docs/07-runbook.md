@@ -7,6 +7,8 @@ against your installed Hermes, render a dry-run plan, and write local copies
 of profile-specific skills. These deployment surfaces do not mutate your live
 Hermes home — `python -m cli.triage install` is intentionally a stub. Runtime
 `proposal_actions.py` is separate and does mutate the configured board and vault.
+`scout_actions.py` is the required scout submission edge: it scopes reports to
+the configured workspace and creates the first intake card through the CLI.
 
 The split:
 

@@ -112,6 +112,7 @@ The engine is intentionally model-free where exact behavior is possible:
 - `scoring.py` validates a model-proposed score breakdown and applies the bar;
 - `routing.py` maps a normalized classifier value to a path;
 - `engine.py` builds research, prep, and fulfillment task specifications;
+- `scout_actions.py` validates and submits reports to a config-scoped intake;
 - `item_vault.py` persists item lifecycle state;
 - `intake_parser.py` parses scout reports;
 - `frontmatter.py` serializes the item files;

@@ -2,7 +2,7 @@
 name: {{SKILL_NAME}}
 description: >
   Source-specific scout for {{SOURCE_ID}}. Runs on a cron under {{PROFILE}}, searches
-  for candidate items, writes a report to the shared intake vault, and creates one
+  for candidate items, submits a report to the configured intake vault, and creates one
   intake Kanban task on board {{BOARD}}.
 metadata:
   hermes:
@@ -26,10 +26,10 @@ hermes -p {{PROFILE}} chat --skills {{SKILL_NAME}} -q "Run one sweep now, follow
 ## Prerequisite (read once)
 
 This skill runs via **cron, not the dispatcher**, so `HERMES_KANBAN_TASK` is
-unset and model-level `kanban_*` tools are not injected. Hermes assigns cron and
-scripts to the CLI surface: use the enabled `terminal` tool to create the first
-card with `hermes kanban`. Workers later spawned from that card receive the
-dedicated Kanban model tools automatically and should use those instead of CLI.
+unset and model-level `kanban_*` tools are not injected. Use the enabled
+`terminal` tool to call `scout_actions.py`; it scopes the report path and creates
+the first card through the Hermes CLI. Workers later spawned from that card
+receive dedicated Kanban model tools automatically and should use those instead.
 
 ## What to look for
 
@@ -44,21 +44,17 @@ dedicated Kanban model tools automatically and should use those instead of CLI.
    same line separated by semicolons; the current parser does not consume
    continuation lines.
 3. Drop low-signal noise — vague hype, single-person rants with no corroboration.
-4. Write the full report to:
-   `{{INTAKE_DIR}}/<UTC-timestamp>-{{SOURCE_ID}}.md`
-   in the format below.
-5. Reuse the report's UTC timestamp in the title and idempotency key. Create ONE
-   intake task through the CLI and parse the JSON result to confirm success:
+4. Write the full report as a draft anywhere under the project workspace, using
+   the format below. Submit it through the config-scoped helper:
 
    ```text
-   hermes kanban --board "{{BOARD}}" create "intake: {{SOURCE_ID}} <UTC-timestamp>" --body "<absolute report path>" --assignee "{{ORCHESTRATOR_PROFILE}}" --workspace "dir:{{PROJECT_ROOT}}" --created-by "{{PROFILE}}" --skill {{ORCHESTRATOR_SKILL}} --idempotency-key "{{PIPELINE_ID}}:intake:{{SOURCE_ID}}:<UTC-timestamp>" --json
+   python scout_actions.py --config "{{CONFIG_PATH}}" {{SOURCE_ID}} --report-file "<absolute draft path>"
    ```
 
-   No parent means the card lands `ready`. `--workspace` pins the repository so
-   the orchestrator can find the report, config, and engine. On a retry, use the
-   same key; Hermes returns the existing non-archived task instead of duplicating
-   it. If the command fails or its JSON does not contain a task id, report the
-   failure and do not claim intake succeeded.
+   The helper validates the report, derives `{{INTAKE_DIR}}` from the selected
+   config, writes only there, and creates the one intake card idempotently through
+   the Hermes CLI. Parse its JSON result and require `ok: true` plus `task_id`.
+   Never choose a vault path yourself or call `hermes kanban create` directly.
 
    Pipeline contract: `{{PIPELINE_ID}}`, config `{{CONFIG_PATH}}`. Never create
    this intake on another board, even if another pipeline uses the same source.
