@@ -1,5 +1,11 @@
 # 04 — Adapting to your domain
 
+This repository also includes `triage-graph-eng.yaml` as a second complete
+example. It demonstrates lighter isolation: a unique pipeline id, board,
+workspace root, and cron scout profile while reusing authenticated worker
+profiles. Pass `--config triage-graph-eng.yaml` before each CLI subcommand;
+omitting `--config` selects `triage.yaml`.
+
 This is the main "what do I do with this code" guide. It's written so an AI agent
 can drive it with the human. Work top to bottom; validate after each step.
 

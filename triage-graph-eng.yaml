@@ -1,0 +1,279 @@
+# ===========================================================================
+# Graph engineering for agentic enterprise software delivery
+#
+# This pipeline discovers evidence-backed graph patterns, verifies them, and
+# produces reviewed tutorials and runnable examples for software engineers using
+# GitHub Copilot Chat and coding agents. Domain policy stays in this file and the
+# Markdown files under pipelines/graph-eng/; the generic engine is unchanged.
+#
+# Validate: python -m cli.triage --config triage-graph-eng.yaml validate
+# ===========================================================================
+
+name: graph-engineering-agentic-delivery
+pipeline_id: graph-eng
+board: graph-engineering-learning
+workspace_root: ./work/graph-eng
+cost_gate_usd: 10
+
+hermes:
+  min_version: "0.20.0"
+  base_profile: default
+  gateway_profile: default
+  project_root: .
+  profile_strategy: clone
+  max_spawn: 3
+  profiles:
+    default:
+      shared: true
+      description: "Owns Skills Map triage state, routing, delivery, and the Discord human gate."
+      toolsets: [file, terminal]
+    # Pipeline-specific because its cron/tool surface differs from the existing
+    # webresearch profile. Cloning preserves the normal Hermes provider setup;
+    # xurl, when installed, uses its own user-level ~/.xurl credentials.
+    graph-research:
+      description: "Discovers and verifies graph-engineering evidence from X and the public web."
+      toolsets: [x_search, web, file, terminal]
+      owns_cron: true
+    researcher:
+      shared: true
+      description: "Performs verified research lanes and structured evidence handoffs."
+      toolsets: [web, file]
+    analyst:
+      shared: true
+      description: "Maps capabilities, learner states, assessments, and curriculum structure."
+      toolsets: [web, file]
+    author:
+      shared: true
+      description: "Writes approved briefs, explainers, and course content."
+      toolsets: [web, file]
+    builder:
+      shared: true
+      description: "Builds approved local labs and adaptive curriculum navigators."
+      toolsets: [file, terminal, code_execution]
+    reviewer:
+      shared: true
+      description: "Independently verifies claims, learning arcs, and runnable artifacts."
+      toolsets: [web, file, terminal]
+
+# Scouts detect only. They write a report and create one intake card; the
+# orchestrator owns dedup, scoring, research fan-out, and routing.
+sources:
+  - id: github_official
+    profile: graph-research
+    skill: scout-github-official
+    schedule: "20 8 * * 1,4"
+    query: |
+      Search current primary GitHub documentation, changelogs, public roadmap
+      material, and first-party examples for GitHub Copilot Chat, agent mode,
+      cloud coding agents, custom instructions, custom agents, skills, hooks,
+      MCP, Spaces, code review, and enterprise controls. Detect concrete changes
+      or proven techniques that improve how a context graph grounds an agentic
+      software-delivery task. State the graph kind, the current-to-target
+      engineering capability, affected delivery stage, reproducible evidence,
+      enterprise constraints, and canonical source URLs. Do not treat a feature
+      announcement as an engineering pattern without an observable workflow.
+
+  - id: x_research
+    profile: graph-research
+    skill: scout-x-research
+    schedule: "50 8 * * 2,5"
+    query: |
+      Research public X posts and discussions about context graphs, knowledge
+      graphs, GraphRAG, repository intelligence, software-delivery graphs, and
+      GitHub Copilot coding-agent workflows. Follow this tool order exactly:
+
+      1. DISCOVER with x_search. Use focused queries, follow promising threads,
+         and capture the author, post id, canonical status URL, date, and claim.
+      2. VERIFY every cited post before including it. Re-open the canonical post
+         through x_search or a public web read and confirm that the author, text,
+         date, links, and surrounding thread support the claim. Follow linked
+         primary sources; label opinion, demonstration, and measured evidence.
+      3. SWITCH to xurl through terminal only when an exact authenticated read
+         from the X API is necessary and public verification is insufficient.
+         xurl is for account/API work, not discovery. Reads must target an
+         explicit post or account discovered in steps 1-2. Use GET-only API
+         requests; never start an auth flow, print tokens, post, reply, like,
+         follow, delete, or mutate an account. If xurl is unavailable,
+         unauthenticated, or unnecessary, continue without it and mark any claim
+         that could not be verified as excluded.
+
+      Prefer technical threads with code, schemas, evaluations, incident detail,
+      or links to primary artifacts. Skip engagement bait and unattributed
+      screenshots. Express each candidate as a narrow capability gap for a
+      software engineer and name its graph kind and Copilot delivery use case.
+
+  - id: web_research
+    profile: graph-research
+    skill: scout-web-research
+    schedule: "50 9 * * 1,4"
+    query: |
+      Search the public web broadly for graph-engineering techniques that can
+      improve agentic enterprise software delivery with GitHub Copilot Chat or
+      coding agents. Cover primary research, standards, engineering articles,
+      technical documentation, conference material with supporting artifacts,
+      and substantial public implementations. Follow promising claims back to
+      their original paper, documentation, repository, benchmark, or incident
+      report. For every candidate, name the graph kind, delivery stage, Copilot
+      surface, current-to-target capability, evidence type, reproducibility, and
+      enterprise constraints. Cross-check consequential claims with an
+      independent source where possible. Skip SEO summaries, unattributed
+      diagrams, copied claims, and generic AI productivity advice with no
+      explicit graph model or delivery workflow.
+
+  - id: practitioner_evidence
+    profile: graph-research
+    skill: scout-practitioner
+    schedule: "20 9 * * 3,6"
+    query: |
+      Search public engineering blogs, conference talks with supporting
+      artifacts, substantial open-source repositories, issues, pull requests,
+      and postmortems for implemented graph-based context systems used in
+      software delivery. Prefer reproducible schemas, ingestion/update logic,
+      retrieval methods, evaluations, and failure lessons. Identify what is
+      reusable with GitHub Copilot Chat or coding agents, what is vendor-specific,
+      and what enterprise governance or data-boundary assumptions apply.
+
+item_schema:
+  fields:
+    - title
+    - claim
+    - sources
+    - why_it_may_matter
+    - graph_kind
+    - delivery_stage
+    - copilot_surface
+    - assumed_current_capability
+    - target_capability
+    - evidence_type
+    - enterprise_constraints
+
+dedup:
+  method: token-cosine
+  duplicate_threshold: 0.62
+  possible_threshold: 0.40
+
+rubric:
+  threshold: 72
+  dimensions:
+    - key: enterprise_delivery_leverage
+      max: 18
+      hint: "measurable leverage for requirements, design, implementation, review, testing, release, or operations"
+    - key: evidence_strength
+      max: 15
+      hint: "primary, traceable, current, and independently verifiable evidence; label vendor and practitioner claims"
+    - key: graph_model_clarity
+      max: 14
+      hint: "explicit nodes, edges, provenance, update rules, retrieval behavior, and graph-kind boundaries"
+    - key: copilot_applicability
+      max: 13
+      hint: "credible use with Copilot Chat, coding agents, instructions, skills, hooks, Spaces, or approved MCP tools"
+    - key: context_traceability
+      max: 12
+      hint: "ability to trace requirements and decisions through code, tests, ownership, evidence, and agent actions"
+    - key: reproducibility
+      max: 10
+      hint: "bounded example data, setup, checks, and expected results that another engineer can reproduce"
+    - key: governance_and_safety
+      max: 10
+      hint: "least privilege, data classification, secrets handling, provenance, auditability, and human review"
+    - key: teaching_value
+      max: 8
+      hint: "clear current-to-target capability with useful practice, feedback, and assessment"
+
+research_lanes:
+  role: researcher
+  guide: pipelines/graph-eng/research-lanes.md
+  lanes:
+    - verify_evidence
+    - classify_graph_pattern
+    - model_context_graph
+    - map_copilot_workflow
+    - audit_enterprise_constraints
+    - design_tutorial_and_evaluation
+    - recommend_artifact
+  classifier_lane: recommend_artifact
+
+route:
+  classifier: recommend_artifact.recommended_format
+  map:
+    focused_pattern_gap: tutorial
+    implementation_pattern_gap: worked_example
+    guided_practice_gap: hands_on_lab
+    system_design_gap: enterprise_reference
+    already_covered: shelve
+    insufficient_evidence: shelve
+
+# All fulfillment is post-gate and uses one persistent per-item directory.
+paths:
+  tutorial:
+    prep:
+      - { stage: define_learning_transition, role: graph_analyst }
+      - { stage: outline_verified_tutorial, role: tutorial_author }
+    propose: { role: orchestrator, template: pipelines/graph-eng/proposal.md }
+    fulfill:
+      - { stage: write_tutorial, role: tutorial_author }
+      - { stage: verify_tutorial, role: reviewer }
+      - { stage: final_delivery, role: orchestrator }
+    workspace_subdir: tutorials
+    scope_rails: pipelines/graph-eng/rails.md
+    deliverable_spec: pipelines/graph-eng/specs/tutorial.md
+
+  worked_example:
+    prep:
+      - { stage: define_example_contract, role: graph_analyst }
+      - { stage: design_verification, role: reviewer }
+    propose: { role: orchestrator, template: pipelines/graph-eng/proposal.md }
+    fulfill:
+      - { stage: build_worked_example, role: example_builder }
+      - { stage: run_example_checks, role: reviewer }
+      - { stage: final_delivery, role: orchestrator }
+    workspace_subdir: worked-examples
+    scope_rails: pipelines/graph-eng/rails.md
+    deliverable_spec: pipelines/graph-eng/specs/worked-example.md
+
+  hands_on_lab:
+    prep:
+      - { stage: define_lab_outcomes, role: graph_analyst }
+      - { stage: design_lab_sequence, role: example_builder }
+    propose: { role: orchestrator, template: pipelines/graph-eng/proposal.md }
+    fulfill:
+      - { stage: build_lab, role: example_builder }
+      - { stage: run_lab_checks, role: reviewer }
+      - { stage: review_learning_arc, role: graph_analyst }
+      - { stage: final_delivery, role: orchestrator }
+    workspace_subdir: hands-on-labs
+    scope_rails: pipelines/graph-eng/rails.md
+    deliverable_spec: pipelines/graph-eng/specs/hands-on-lab.md
+
+  enterprise_reference:
+    prep:
+      - { stage: define_reference_architecture, role: graph_analyst }
+      - { stage: define_governance_checks, role: reviewer }
+    propose: { role: orchestrator, template: pipelines/graph-eng/proposal.md }
+    fulfill:
+      - { stage: build_reference_package, role: example_builder }
+      - { stage: verify_reference_package, role: reviewer }
+      - { stage: final_delivery, role: orchestrator }
+    workspace_subdir: enterprise-references
+    scope_rails: pipelines/graph-eng/rails.md
+    deliverable_spec: pipelines/graph-eng/specs/enterprise-reference.md
+
+  shelve:
+    auto: true
+
+roles:
+  orchestrator: default
+  researcher: researcher
+  graph_analyst: analyst
+  tutorial_author: author
+  example_builder: builder
+  reviewer: reviewer
+
+# Preserve the established Discord gate; pipeline-qualified references prevent
+# replies from being applied to another board (approve graph-eng:<slug>).
+gate:
+  channel: discord
+  target: discord:1484142557704491119
+  approve: [approve]
+  shelve: [shelve, "reject the rest"]
+  modify: [modify]

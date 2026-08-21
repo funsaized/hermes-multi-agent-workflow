@@ -7,10 +7,11 @@ A reusable skeleton for an intended **autonomous, multi-agent triage pipeline** 
 **one human approval gate**, then **fulfills and delivers** — all coordinated on a
 single Hermes Kanban board.
 
-It is currently adapted as a worked example around Andrew Ng's AI Engineering
-Skills Map: find evidence-backed learning gaps for software engineers, research
-them, then produce a brief, explainer, lab, full course, or adaptive curriculum.
-The engine remains generic, so the domain can still be replaced in configuration.
+It includes two domain configurations: `triage.yaml`, the Andrew Ng AI
+Engineering Skills Map example, and `triage-graph-eng.yaml`, which researches
+context graphs for agentic enterprise delivery with GitHub Copilot and produces
+tutorials, worked examples, labs, or reference packages. The engine remains
+generic; each pipeline's subject matter stays in configuration and Markdown.
 
 > **This is a template, not a turnkey app.** It runs its unit tests and validates
 > its config out of the box, but going live requires setting up your Hermes
@@ -56,6 +57,7 @@ python -m cli.triage scaffold            # dry-run Hermes setup plan
 python -m cli.triage scaffold --no-preflight  # offline/pure-plan rendering
 python -m cli.triage preflight           # read-only capability/resource check
 python -m cli.triage render-skills       # render profile-specific SKILL.md files
+python -m cli.triage --config triage-graph-eng.yaml validate
 ```
 
 The CLI exposes six surfaces; four are implemented and two are stubs:
@@ -91,7 +93,8 @@ at. Hand your coding agent **`AGENTS.md`** and ask it to walk you through
 ## Repository layout
 
 ```
-triage.yaml              THE config — your whole pipeline (start here)
+triage.yaml              AI Engineering Skills Map pipeline
+triage-graph-eng.yaml    Graph engineering + GitHub Copilot pipeline
 AGENTS.md                Guide for the AI agent adapting this template
 engine/                  Generic engine (rarely edited)
   config.py              Loads + validates triage.yaml (typed Hermes deployment metadata)
@@ -115,6 +118,7 @@ scripts/cost_report.py   Standalone per-item spend report (not automatically enf
 scripts/rehearse_scaffold.py  Opt-in disposable-Home rehearsal (env-flag gated)
 tests/                   Generic engine + planner + preflight + render + CLI-contract tests
 docs/                    Deep-dive docs (architecture, board, config, adapting, …)
+pipelines/graph-eng/     Graph-engineering research guide, rails, and artifacts
 examples/                Reference configs
 ```
 
