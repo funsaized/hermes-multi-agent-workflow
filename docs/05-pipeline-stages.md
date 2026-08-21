@@ -84,10 +84,14 @@ maps it to a path name; the orchestrator writes `path: <name>` on the item. An
 
 `TriageEngine.prep_specs(slug, path)` returns ordered pre-gate specs with no
 parent links. `pre_gate_actions.py` resolves abstract roles to configured
-profiles and creates the chain idempotently. When that
-caller-managed chain finishes, it drafts the proposal from
-`paths/proposals/<path>.md`, sets
-`status: awaiting_approval`, and **sends it**.
+profiles, creates the chain idempotently, and appends a `propose:` card parented
+to the last prep card (or route card when prep is empty). That proposal worker
+drafts from `paths/proposals/<path>.md`, sets `status: awaiting_approval`, and
+**sends it**.
+
+The explicit proposal card is the ordering boundary: the route worker completes
+after scheduling the chain, and Kanban promotes the proposal only after every
+prep dependency is done.
 
 - ⚠️ **Gotcha — delivery ≠ status.** The orchestrator is a headless worker. It
   MUST run `hermes send --to <gate.target> --file <proposal>`; setting the status field

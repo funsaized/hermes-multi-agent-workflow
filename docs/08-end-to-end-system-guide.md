@@ -295,9 +295,10 @@ Evidence: `triage.yaml:113-121`, `engine/routing.py:15-28`.
 
 ### Stages 6–7 — Prepare and propose
 
-The selected path defines pre-gate stages. The model workers gather the material
-needed for a decision, then the orchestrator fills the path’s proposal template,
-sets the item to `awaiting_approval`, and explicitly sends the message.
+The selected path defines pre-gate stages. `pre_gate_actions.py` creates their
+linear chain and a proposal card after the final prep dependency. That worker
+fills the path’s proposal template, sets the item to `awaiting_approval`, and
+explicitly sends the message.
 
 A file status does not notify anyone. Delivery must be a real gateway send.
 
@@ -585,9 +586,10 @@ Evidence: `engine/scaffold.py`, `engine/hermes_preflight.py`,
 
 `research_specs()` returns evidence cards and `classifier_spec()` returns their
 fan-in; the route card is still manually created by the orchestrator skill.
-`pre_gate_actions.py` now applies the ordered `prep_specs()` as a linked chain,
-resolving configured roles to profiles and preserving each exact workspace.
-Route-card creation and root completion remain model-applied transitions.
+`pre_gate_actions.py` applies the ordered `prep_specs()` as a linked chain,
+resolving configured roles to profiles, preserving each exact workspace, and
+appending a dependency-gated proposal card. Route-card creation and root
+completion remain model-applied transitions.
 
 The adapter removes model improvisation from prep-chain mechanics, but the earlier
 root and route transitions still rely on the model.

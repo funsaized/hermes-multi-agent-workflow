@@ -113,23 +113,18 @@ When the route card fires, read the classifier value the classifier lane emitted
 `TriageEngine.route(classification)` → a path name. Write `path: <name>` on the
 item. If the path is `auto` (e.g. `shelve`), close out — no proposal.
 
-### 6. Prep + propose (engine returns ordered prep specs)
+### 6. Schedule prep + proposal (deterministic adapter)
 Apply the engine specs through the deterministic adapter:
 ```
 python pre_gate_actions.py --config "{{CONFIG_PATH}}" <slug> --route-task "$HERMES_KANBAN_TASK"
 ```
-Never create prep cards yourself. The adapter resolves each abstract
+Never create prep or proposal cards yourself. The adapter resolves each abstract
 `TaskSpec.role` through `spec.assignee(config)`, preserves its workspace, creates
-the linear parent chain, and makes retries idempotent. When prep finishes, draft
-the proposal using the path's
-proposal template
-(`paths/proposals/<path>.md`), set item `status: awaiting_approval`, and **send it
-to the human** — you MUST actually deliver it:
-```
-hermes send --to {{GATE_TARGET}} --file <proposal.md>
-```
-Setting status is NOT delivery. (See docs/06 + the runbook.) Then move on to
-other items while waiting — the gate is non-blocking.
+the linear prep chain, and creates one `propose:` card parented to its final card
+(or directly to this route card when prep is empty). Confirm the adapter returns
+`proposal_task_id`, then complete this route task. Do not draft, send, or mark the
+proposal awaiting approval here; the dependency-gated proposal worker does that
+after prep finishes. The gate remains non-blocking.
 
 ### 7. Gate (human replies; you shell to the handler)
 Map the human's reply verb (see `gate:` in triage.yaml — NO leading slash) to:

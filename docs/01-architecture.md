@@ -68,8 +68,10 @@ yet fully enforced by deterministic code.
    neither the route card nor the board transitions today.
 4. The orchestrator reads the classifier's output and calls `engine.route()` to
    pick a path. `pre_gate_actions.py` applies the ordered `engine.prep_specs()`
-   through resolved profiles and creates the linked **prep** chain idempotently.
-5. It drafts a proposal and **sends it to the human** (`hermes send`).
+   through resolved profiles, creates the linked **prep** chain idempotently, and
+   appends a `propose:` card after the final prep card.
+5. The proposal worker drafts the proposal and **sends it to the human**
+   (`hermes send`).
 6. The human replies; the orchestrator shells to `proposal_actions.py`, which
    reads `paths.<path>.fulfill` and spawns the **fulfillment** chain in a shared
    persistent workspace (`engine.fulfillment_specs`).

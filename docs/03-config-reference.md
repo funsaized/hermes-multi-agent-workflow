@@ -109,8 +109,8 @@ A map of path name → definition. A path is one outcome of routing.
 
 | Key | Meaning |
 |---|---|
-| `prep[]` | Ordered stages BEFORE the gate. Each `{stage, role}`. `prep_specs()` does not link them; the caller must create sequential parent edges. |
-| `propose.role` | Who drafts + sends the proposal (usually `orchestrator`). |
+| `prep[]` | Ordered stages BEFORE the gate. Each `{stage, role}`. `pre_gate_actions.py` links them sequentially and appends the proposal card. |
+| `propose.role` | Who runs the dependency-gated card that drafts + sends the proposal (usually `orchestrator`). |
 | `propose.template` | Markdown proposal template under `paths/proposals/`. |
 | `fulfill[]` | Stages AFTER approval. Each `{stage, role}`. Run in a shared persistent workspace. |
 | `workspace_subdir` | Bucket under `workspace_root` for this path's per-item dirs (e.g. `builds`). Defaults to the path name. |

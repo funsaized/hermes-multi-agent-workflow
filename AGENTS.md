@@ -46,7 +46,7 @@ that belongs in config.
 **Fat engine, thin skill.** Deterministic calculations and task-spec generation
 (dedup, scoring math, route resolution, lane/stage specs, workspace selection)
 live in `engine/engine.py::TriageEngine`. Deterministic adapters apply and link
-prep and fulfillment specs. Pre-gate route-card creation and root completion still
+prep/proposal and fulfillment specs. Pre-gate route-card creation and root completion still
 live in orchestrator prose; do not describe those transitions as engine-enforced.
 Read `docs/01-architecture.md`.
 

@@ -45,9 +45,9 @@ no polling:
 `classifier_spec()` records every evidence task as a parent.
 `engine.fulfillment_specs()` returns ordered specs with empty parents;
 `proposal_actions.py::action_approve` creates those cards and links each later
-stage to its predecessor. No equivalent deterministic pre-gate adapter currently
-creates the route card or links prep specs; the orchestrator skill instructs its
-model to do both and to complete the triage root after wiring the fan-out.
+stage to its predecessor. `pre_gate_actions.py` similarly links the prep stages
+and appends a proposal card, so proposal delivery cannot run before prep. Route
+card creation and triage-root completion remain orchestrator-applied transitions.
 
 ## Two board gotchas the engine already handles
 
