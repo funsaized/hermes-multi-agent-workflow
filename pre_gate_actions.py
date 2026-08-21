@@ -30,10 +30,16 @@ completed proposal to `{output_path}`. The reply line must use the pipeline-qual
 reference exactly: `approve {reference} | shelve {reference}: <reason> | modify
 {reference}: <change>`.
 
-Set the item's frontmatter `status` to `awaiting_approval`, then send the proposal
-with `hermes send --to {config.gate.target} --file "{output_path}"`. Setting status
-alone is not delivery. Do not approve or create fulfillment cards; complete only
-this proposal task after the send succeeds.
+Then run the deterministic send adapter:
+
+    python delivery_actions.py --config "{config.config_path}" send-proposal {slug}
+
+It sends ONE gate message with the proposal file attached (long proposals must
+never be sent as message text — that chunks into a burst and trips the platform
+rate limit), sets the item to `awaiting_approval`, and records the send. Do not
+run `hermes send` yourself and never retry in a loop: if the adapter exits
+non-zero, block this task with its JSON error. Do not approve or create
+fulfillment cards; complete only this proposal task after the adapter returns ok.
 """
 
 

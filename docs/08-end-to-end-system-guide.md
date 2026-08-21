@@ -344,11 +344,13 @@ files after task completion. A shared directory preserves artifacts across
 roles.
 
 The FINAL fulfillment stage's task body carries an engine-generated instruction
-to run `delivery_actions.py`, which resolves the path's configured
-`deliverable:` file inside that workspace, sends it via
-`hermes send --to <gate.target>`, marks the item `delivered`, and comments on
-the triage root — or exits non-zero so the worker blocks. Delivery is no longer
-a prose instruction.
+to run `delivery_actions.py deliver`, which resolves the path's configured
+`deliverable:` file inside that workspace, sends it to `<gate.target>` as one
+`hermes send` attachment message (caption + `MEDIA:<path>`, bounded 429
+backoff), marks the item `delivered`, and comments on the triage root — or
+exits non-zero so the worker blocks. Delivery is no longer a prose instruction,
+and the same adapter's `send-proposal` action performs the earlier proposal
+send the same way.
 
 Evidence: `engine/engine.py` (`_chain` delivery note), `delivery_actions.py`,
 `proposal_actions.py`, `tests/test_delivery_actions.py`.

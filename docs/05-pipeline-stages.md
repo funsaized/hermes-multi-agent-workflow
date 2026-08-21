@@ -93,17 +93,28 @@ that value from the classifier's result — its only judgment — and passes it 
 parent links. `pre_gate_actions.py` resolves abstract roles to configured
 profiles, creates the chain idempotently, and appends a `propose:` card parented
 to the last prep card (or route card when prep is empty). That proposal worker
-drafts from `paths/proposals/<path>.md`, sets `status: awaiting_approval`, and
-**sends it**.
+drafts from `paths/proposals/<path>.md`, renders it to
+`<workspace>/proposals/<slug>.md`, and runs
+`python delivery_actions.py --config <cfg> send-proposal <slug>`. The adapter
+sends ONE gate message with the file as a native attachment plus a short
+deterministic caption (title, path, score, reply line), sets
+`status: awaiting_approval`, and records `proposal_sent_at` — re-runs are
+idempotent no-ops (`--resend` overrides for redrafts).
 
 The explicit proposal card is the ordering boundary: the route worker completes
 after scheduling the chain, and Kanban promotes the proposal only after every
 prep dependency is done.
 
-- ⚠️ **Gotcha — delivery ≠ status.** The orchestrator is a headless worker. It
-  MUST run `hermes send --to <gate.target> --file <proposal>`; setting the status field
-  notifies no one. (The first live run of the origin system produced proposals
-  that never reached the human because of exactly this.)
+- ⚠️ **Gotcha — delivery ≠ status.** Setting the status field notifies no one.
+  (The first live run of the origin system produced proposals that never reached
+  the human because of exactly this.) The send-proposal adapter does both,
+  status AFTER a successful send, so a failed send stays retry-safe.
+- ⚠️ **Gotcha — never send a proposal as message text.** `hermes send --file`
+  sends file *contents* as text, which Discord chunks into a burst of 2000-char
+  messages; a 17 KB proposal reliably trips the platform rate limit that way
+  (and an improvised worker retry loop then trips the *global* bucket). The
+  adapter's `MEDIA:` attachment path is one message regardless of length, with
+  a bounded 15s/45s/120s backoff if a 429 still occurs.
 
 ## Stage 8 — Human gate
 
@@ -134,7 +145,8 @@ chain via `TriageEngine.fulfillment_specs()`.
 ## Stage 12 — Delivery (`delivery_actions.py`)
 
 The engine appends a deterministic instruction to the FINAL fulfillment stage's
-task body: run `python delivery_actions.py --config <cfg> <slug>`. The adapter
+task body: run `python delivery_actions.py --config <cfg> deliver <slug>` (the
+pre-split no-subcommand form still works). The adapter
 
 1. requires the item to be `approved` (the gate is real — unapproved work is
    refused; a `delivered` item is an idempotent no-op),
@@ -142,8 +154,8 @@ task body: run `python delivery_actions.py --config <cfg> <slug>`. The adapter
    `paths.<path>.deliverable` (filename or glob, exactly one match), falling
    back to a single `deliverable.*` file, otherwise failing with a listing of
    what IS in the workspace,
-3. sends it through the configured Hermes channel:
-   `hermes send --to <gate.target> --file <deliverable>` — the same messaging
+3. sends it through the configured Hermes channel as ONE attachment message
+   (caption + `MEDIA:<path>`, bounded 429 backoff) — the same messaging
    contract as the proposal send, and
 4. marks the item `delivered` and comments on the triage root.
 

@@ -42,7 +42,7 @@ that belongs in config.
 | `intake_actions.py` — intake adapter (plan/apply/verify) | per-role/per-stage `model:` routing in `roles:`/stages |
 | `pre_gate_actions.py` — route + prep + proposal | each path's `deliverable:` file |
 | `proposal_actions.py` — gate handler (config-driven) | |
-| `delivery_actions.py` — delivery hook (`hermes send`) | |
+| `delivery_actions.py` — gate sends (proposal + deliverable, one attachment message each) | |
 
 ## Architecture in one paragraph
 
@@ -91,10 +91,16 @@ These cost real debugging in the system this was extracted from. Preserve them:
 - **Post-gate stages must use a persistent `dir` workspace, not scratch.** Scratch
   dirs are wiped between tasks, stranding the final delivery step. `engine.py`
   already does this for `fulfill` chains — don't change it to scratch.
-- **Setting status ≠ delivering.** Status fields don't notify anyone. The
-  proposal worker must actually run `hermes send`; final delivery is enforced by
-  `delivery_actions.py`, which the engine wires into the last fulfillment
-  stage's task body — keep both.
+- **Setting status ≠ delivering.** Status fields don't notify anyone. Both gate
+  sends are enforced by `delivery_actions.py` (`send-proposal` from the propose
+  card's body, `deliver` wired into the last fulfillment stage's body) — keep
+  both.
+- **Never send long content as message text.** `hermes send --file` sends file
+  *contents* as text; Discord chunks it into a rapid burst of 2000-char messages
+  and rate-limits (a 17 KB proposal killed a live propose card this way). The
+  adapter sends ONE message with the file as a `MEDIA:` attachment plus a short
+  caption, with bounded 429 backoff. Workers never retry sends in a loop — an
+  improvised retry burst trips the platform's *global* bucket.
 - **Never hardcode a board DB path.** `engine.kanban_store.resolve_board_db`
   honors `HERMES_KANBAN_DB` / `HERMES_HOME` and probes `~/.hermes` and
   `%LOCALAPPDATA%/hermes` (Windows). Hardcoded per-machine paths in scripts or

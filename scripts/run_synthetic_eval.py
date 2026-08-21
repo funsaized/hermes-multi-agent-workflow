@@ -189,12 +189,39 @@ def run(report_path: Path | None = None) -> dict:
                 "auto path status not recorded",
             )
 
-        # ---- 5. gate: approve spawns the fulfillment chain ---- #
+        # ---- 5. proposal send: one attachment message, bounded 429 backoff ---- #
+        with s.check("proposal send: long proposal rides as ONE attachment message"):
+            proposal_path = root / "work" / "proposals" / f"{SLUG}.md"
+            proposal_path.parent.mkdir(parents=True, exist_ok=True)
+            # Far beyond any 2000-char text limit — must still be a single send.
+            proposal_path.write_text("# Proposal\n" + "x" * 17000, encoding="utf-8")
+            responses = [
+                Mock(returncode=1, stdout="", stderr="Discord API error (429): retry_after 0.4s"),
+                Mock(returncode=0, stdout="", stderr=""),
+            ]
+            with (
+                patch.object(delivery_actions.shutil, "which", return_value="hermes"),
+                patch.object(delivery_actions.subprocess, "run", side_effect=responses) as send_cmd,
+                patch.object(delivery_actions.time, "sleep") as slept,
+            ):
+                sent_prop = delivery_actions.action_send_proposal(SLUG, config_path)
+            expect(sent_prop["ok"] and sent_prop["send_attempts"] == 2, f"proposal send failed: {sent_prop}")
+            expect(send_cmd.call_count == 2, "429 must be retried exactly once here")
+            message = send_cmd.call_args.args[0][-1]
+            expect("MEDIA:" in message, "proposal not sent as a native attachment")
+            expect(len(sent_prop["caption"]) <= delivery_actions.GATE_CAPTION_LIMIT,
+                   "caption exceeds the single-message cap")
+            expect(slept.call_args.args[0] == delivery_actions.RATE_LIMIT_RETRY_DELAYS[0],
+                   "429 backoff not applied")
+            expect(vault.load(SLUG).frontmatter["status"] == "awaiting_approval",
+                   "send-proposal must set awaiting_approval")
+        with s.check("proposal re-send is an idempotent no-op"):
+            again_prop = delivery_actions.action_send_proposal(SLUG, config_path)
+            expect(again_prop["ok"] and again_prop.get("already_sent"), "second proposal send not a no-op")
+
+        # ---- 6. gate: approve spawns the fulfillment chain ---- #
         approved = {}
         with s.check("approve spawns ordered fulfillment chain with model routing"):
-            item = vault.load(SLUG)
-            item.frontmatter["status"] = "awaiting_approval"  # the proposal worker's transition
-            vault.save(item)
             approved = proposal_actions.action_approve(f"synth:{SLUG}", str(config_path))
             expect(approved["ok"], f"approve failed: {approved}")
             chain = approved["chain"]
@@ -205,9 +232,10 @@ def run(report_path: Path | None = None) -> dict:
             review = task_rows(db_path, "SELECT model_override FROM tasks WHERE id = ?", chain[1]["task_id"])[0]
             expect(review["model_override"] == "frontier-model-x", "stage-level model override missing")
             final = task_rows(db_path, "SELECT body FROM tasks WHERE id = ?", chain[2]["task_id"])[0]
-            expect("delivery_actions.py" in final["body"], "final stage lacks delivery instruction")
+            expect(f"delivery_actions.py" in final["body"] and f"deliver {SLUG}" in final["body"],
+                   "final stage lacks delivery instruction")
 
-        # ---- 6. delivery hook ---- #
+        # ---- 7. delivery hook ---- #
         with s.check("delivery: blocks honestly when the deliverable is missing"):
             try:
                 delivery_actions.action_deliver(SLUG, config_path, dry_run=True)
@@ -228,6 +256,7 @@ def run(report_path: Path | None = None) -> dict:
             expect(sent["ok"], f"delivery failed: {sent}")
             command = run_cmd.call_args.args[0]
             expect(command[1] == "send" and "discord:synthetic-gate" in command, f"bad send command: {command}")
+            expect("MEDIA:" in command[-1], "deliverable not sent as a native attachment")
             expect(vault.load(SLUG).frontmatter["status"] == "delivered", "item not marked delivered")
         with s.check("delivery re-run is an idempotent no-op"):
             again = delivery_actions.action_deliver(SLUG, config_path)

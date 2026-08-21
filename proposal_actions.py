@@ -227,8 +227,12 @@ def action_modify(reference: str, change: str, config_path: str | Path | None = 
     redraft_body = (
         f"Human requested modifications to the proposal for item `{slug}`.\n\n"
         f"Requested change:\n> {change}\n\n"
-        "Redraft the proposal and re-send it to the human. After re-sending, set "
-        "item status back to `awaiting_approval`.\n"
+        "Re-render the proposal file for this item addressing the change, then run "
+        "the deterministic send adapter:\n\n"
+        f"    python delivery_actions.py --config \"{config.config_path}\" send-proposal {slug} --resend\n\n"
+        "It re-sends the proposal as one gate message with the file attached and "
+        "sets the item back to `awaiting_approval`. If it exits non-zero, block "
+        "this task with its JSON error — never run `hermes send` yourself.\n"
     )
     store = KanbanStore(board_db(config))
     conn = store.connect()

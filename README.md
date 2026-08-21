@@ -117,7 +117,7 @@ engine/                  Generic engine (rarely edited)
 intake_actions.py        Deterministic intake adapter — plan / apply (pre-gate graph) / verify
 pre_gate_actions.py      Route resolution + prep chain + proposal card (incl. auto paths)
 proposal_actions.py      Human-gate handler (approve/shelve/modify) — config-driven
-delivery_actions.py      Deterministic delivery hook — locate deliverable, `hermes send`, record
+delivery_actions.py      Deterministic gate sends — proposal + deliverable as single attachment messages
 scout_actions.py         Config-scoped scout report + intake-card submission
 paths/                   Per-path templates you customize
   rails/   specs/   proposals/

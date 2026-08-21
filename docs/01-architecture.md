@@ -77,15 +77,16 @@ reviewed, deterministic adapters rather than model-interpreted prose.
    plus a `propose:` card — or closes out an auto path (e.g. shelve) with no
    cards.
 5. The proposal worker drafts the proposal (the model's third judgment: prose)
-   and **sends it to the human** (`hermes send`).
+   and runs `delivery_actions.py send-proposal`, which **sends it to the human**
+   as one `hermes send` attachment message and sets `awaiting_approval`.
 6. The human replies; the orchestrator shells to `proposal_actions.py`, which
    reads `paths.<path>.fulfill` and spawns the **fulfillment** chain in a shared
    persistent workspace (`engine.fulfillment_specs`).
 7. The engine writes a deterministic delivery instruction into the FINAL
-   fulfillment stage's body: its worker runs `delivery_actions.py`, which
-   locates the configured deliverable in the persistent workspace, sends it via
-   `hermes send --to <gate.target>`, and records delivery on the item — or
-   fails loudly so the worker blocks instead of improvising.
+   fulfillment stage's body: its worker runs `delivery_actions.py deliver`,
+   which locates the configured deliverable in the persistent workspace, sends
+   it to `<gate.target>` as a single attachment message, and records delivery
+   on the item — or fails loudly so the worker blocks instead of improvising.
 
 ## Multiple pipelines, one authenticated fleet
 

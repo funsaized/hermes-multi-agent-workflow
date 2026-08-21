@@ -85,7 +85,13 @@ The adapter resolves the path via `route.map`, writes it on the item, and either
 creates the linked prep chain plus one `propose:` card, or closes out an auto
 path (e.g. shelve). Never create prep or proposal cards yourself. Confirm the
 JSON response, then complete this route task. The proposal is drafted later by
-the dependency-gated proposal worker; the gate remains non-blocking.
+the dependency-gated proposal worker; the gate remains non-blocking. The
+proposal worker renders the proposal file, then sends it with
+`python delivery_actions.py --config "{{CONFIG_PATH}}" send-proposal <slug>` —
+one gate message with the file attached. Never send a proposal with raw
+`hermes send`: long text chunks into a message burst that trips the platform
+rate limit, and never retry a failed send in a loop — block with the adapter's
+JSON error instead.
 
 ### 5. Gate (human replies; you shell to the handler)
 Map the human's reply verb (see `gate:` in triage.yaml — NO leading slash) to:
@@ -100,8 +106,9 @@ workspace. You do nothing else.
 
 ### 6. Deliver (deterministic)
 The final fulfillment stage's task body instructs its worker to run
-`delivery_actions.py`, which locates the configured deliverable and sends it to
-{{GATE_TARGET}} via `hermes send`. You never send deliverables ad hoc; if a
+`delivery_actions.py deliver`, which locates the configured deliverable and
+sends it to {{GATE_TARGET}} via `hermes send` as a single attachment message
+(with bounded 429 backoff built in). You never send deliverables ad hoc; if a
 delivery task is blocked, surface the adapter's error to the human.
 
 ## Rules

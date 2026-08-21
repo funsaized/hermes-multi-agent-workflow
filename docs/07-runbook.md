@@ -342,8 +342,9 @@ their respective gateways being up.
 ## Day-to-day
 
 - **Watch:** `hermes kanban --board <board> list`. Proposals reach Discord
-  `#briefs` when the proposal worker runs `hermes send`; final deliveries are
-  sent by `delivery_actions.py` from the last fulfillment stage. Board status
+  `#briefs` when the proposal worker runs `delivery_actions.py send-proposal`
+  (one message, proposal file attached); final deliveries are sent by
+  `delivery_actions.py deliver` from the last fulfillment stage. Board status
   changes alone are silent.
 - **Decide:** reply (no slash) `approve <slug>` / `shelve <slug>: reason` /
   `modify <slug>: change`; `reject the rest` (or `python proposal_actions.py
@@ -378,7 +379,8 @@ their respective gateways being up.
 | Scout runs, no card appears | Confirm `terminal`, `file`, and the source toolset are enabled on the `cron` platform. Inspect the scout result for the JSON response from `hermes kanban --board <board> create`; a missing task id means intake failed. |
 | Crons never fire | The owning profile's gateway is not running. Run `hermes -p <scout> gateway status` and `hermes gateway list` to confirm. The job is registered under one profile; the scheduler must tick under that same profile. |
 | Card stuck in `todo` | It has an unfinished parent. Don't parent the first post-gate task to the triage card. |
-| Proposal status set but no DM | Orchestrator didn't `hermes send`; status ≠ delivery (docs/05). |
+| Proposal status set but no DM | Worker skipped `delivery_actions.py send-proposal`; status ≠ delivery (docs/05). |
+| Gate send blocked with a 429 error | The adapter already retried with backoff (15s/45s/120s). Wait a few minutes of channel silence, then re-run the same adapter command once — never retry `hermes send` in a loop, and never send long content as message text. |
 | `/approve` triggers the wrong approval flow | Hermes reserves it for command execution; reply with ordinary text `approve <slug>`. |
 | Final delivery can't find artifacts | A stage used scratch, not the persistent `dir` workspace. |
 | `gateway start` fails on WSL | Use `hermes -p <profile> gateway run` (foreground). |

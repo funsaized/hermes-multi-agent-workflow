@@ -39,6 +39,14 @@ def parse_scalar(value: str) -> Any:
     except ValueError:
         pass
     if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+        # Quoted scalars are written by format_scalar via repr(); literal_eval
+        # inverts it exactly (Windows paths double their backslashes otherwise).
+        try:
+            evaluated = ast.literal_eval(value)
+            if isinstance(evaluated, str):
+                return evaluated
+        except Exception:
+            pass
         return value[1:-1]
     return value
 

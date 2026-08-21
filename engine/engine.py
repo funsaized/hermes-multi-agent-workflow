@@ -279,11 +279,12 @@ class TriageEngine:
                 delivery_note = (
                     f"\n--- FINAL DELIVERY (deterministic adapter) ---\n"
                     f"This is the final fulfillment stage. Finish the stage's own work, then run:\n\n"
-                    f"    python delivery_actions.py --config \"{self.config.config_path}\" {slug}\n\n"
-                    "The adapter locates the configured deliverable in this workspace, sends it to "
-                    "the configured gate target via `hermes send`, and records delivery on the item. "
-                    "Complete this task only after it returns ok. If it exits non-zero, block this "
-                    "task with its JSON error — do NOT send manually or improvise a path.\n"
+                    f"    python delivery_actions.py --config \"{self.config.config_path}\" deliver {slug}\n\n"
+                    "The adapter locates the configured deliverable in this workspace and sends it to "
+                    "the configured gate target as a single `hermes send` attachment message, then "
+                    "records delivery on the item. Complete this task only after it returns ok. If it "
+                    "exits non-zero, block this task with its JSON error — do NOT send manually, "
+                    "retry in a loop, or improvise a path.\n"
                 )
             body = (
                 f"Stage `{stage.stage}` ({phase}) for item `{slug}` on the `{path_name}` path.\n"
