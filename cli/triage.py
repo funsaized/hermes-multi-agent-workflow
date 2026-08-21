@@ -37,7 +37,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     except ConfigError as exc:
         print(f"[FAIL] {exc}")
         return 1
-    print(f"[OK] triage.yaml valid - pipeline {cfg.name!r}")
+    print(f"[OK] triage.yaml valid - pipeline {cfg.name!r} ({cfg.pipeline_id})")
     print(f"  board: {cfg.board}   workspace_root: {cfg.workspace_root}   cost_gate: ${cfg.cost_gate_usd}")
     print(f"  sources: {[s.id for s in cfg.sources]}")
     print(f"  rubric: {len(cfg.rubric.dimensions)} dims, threshold {cfg.rubric.threshold}/{cfg.rubric.max_total}")
@@ -49,11 +49,15 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(f"  ! {warning}")
     # Warn about referenced-but-missing template files (non-fatal).
     missing = []
-    if cfg.research.guide and not Path(cfg.research.guide).exists():
+    def exists(rel: str) -> bool:
+        path = Path(rel)
+        return (path if path.is_absolute() else Path(cfg.hermes.project_root) / path).exists()
+
+    if cfg.research.guide and not exists(cfg.research.guide):
         missing.append(cfg.research.guide)
     for p in cfg.paths.values():
         for rel in (p.scope_rails, p.deliverable_spec, p.proposal_template):
-            if rel and not Path(rel).exists():
+            if rel and not exists(rel):
                 missing.append(rel)
     if missing:
         print("  ! referenced template files not found (relative to CWD; fill them in or run from repo root):")

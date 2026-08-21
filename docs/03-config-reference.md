@@ -8,8 +8,9 @@ Every key in `triage.yaml`. The typed view is `engine/config.py`; the validator 
 | Key | Type | Meaning |
 |---|---|---|
 | `name` | str | Pipeline slug, for logs. |
+| `pipeline_id` | str | Stable runtime namespace. Lowercase letters, digits, `_`, and `-` only. Rendered skill names, cron names, gate references, and retry keys derive from it. Defaults to `board` for legacy configs. |
 | `board` | str | Kanban board slug. `default` → `~/.hermes/kanban.db`; else `~/.hermes/kanban/boards/<board>/kanban.db`. |
-| `workspace_root` | path | Base for the item vault and per-item persistent workspaces. Relative values are resolved by runtime code from the process working directory; run from `hermes.project_root` or use an absolute path. |
+| `workspace_root` | path | Base for the item vault and per-item persistent workspaces. Relative values resolve from `hermes.project_root`. Use a different root for every pipeline. |
 | `cost_gate_usd` | number | Threshold read by `scripts/cost_report.py`. The current pipeline does not invoke that script or enforce pause/notify behavior automatically. |
 
 ## `hermes:` — deployment metadata
@@ -34,6 +35,7 @@ Each `hermes.profiles.<name>` supports:
 | `description` | Required, non-empty purpose. Used by `profile create --description` and preflight for cloned profiles; the existing base profile's description is not enforced. |
 | `toolsets` | Toolsets the scaffold enables on the profile's CLI platform and, when `owns_cron: true`, its cron platform. Preflight separately verifies that each name is advertised by the installed runtime and that it is enabled on every required surface. |
 | `owns_cron` | Whether this profile owns scheduled source jobs and therefore needs a profile-local gateway process to tick cron. That scheduler gateway has Kanban dispatch disabled and does not need Discord credentials. It is invalid unless a source uses the profile. |
+| `shared` | Reuse an existing authenticated profile. Scaffold skips profile creation, `terminal.cwd` mutation, and gateway installation for it. Omit or set `false` for a pipeline-specific profile that scaffold should create. |
 
 For temporary backward compatibility, omitting `hermes:` derives profile names
 from `roles:` and `sources:`. Validation exposes a warning because descriptions
@@ -48,7 +50,7 @@ List of detectors. Each runs a scout skill on a profile, on a cron.
 |---|---|
 | `id` | Short id (used in report filenames + the intake task title). |
 | `profile` | Hermes profile the scout runs under (binds the model). |
-| `skill` | Name of the source-specific skill rendered from the shared scout template and manually installed on that profile. |
+| `skill` | Base name of the source-specific skill. The installed name is `<pipeline_id>-<skill>` so one profile can host scouts from multiple pipelines. |
 | `schedule` | Cron expression. Registered in the source profile's local cron store (see runbook). |
 | `query` | The domain prompt — what to look for. Pasted into the scout skill. |
 
@@ -158,13 +160,13 @@ them in this order:
    unless `--no-preflight` is supplied, the CLI first runs read-only Hermes
    subprocess checks. It emits an ordered
    sequence of `hermes profile create <profile> --clone-from …` for every profile
-   except the already-existing `base_profile`,
+   except the already-existing `base_profile` and profiles marked `shared: true`,
    `hermes -p <profile> config set terminal.cwd <abs>`,
    `hermes -p <profile> tools enable … --platform cli` plus `--platform cron`
    for cron-owning profiles, profile-local
    `cron create --workdir <abs> --deliver local`, and
    `gateway install --start-now --start-on-login` for the configured gateway and
-   every cron-owning profile. A scout's gateway is a local cron scheduler, not an
+   every non-shared cron-owning profile. A scout's gateway is a local cron scheduler, not an
    additional Discord listener or Kanban dispatcher.
    When `gateway_profile == base_profile`, the existing root gateway is reused
    and no competing gateway installation is emitted. Skill installation and model/auth are
@@ -190,6 +192,20 @@ planning, preflight, and rendering produce reviewable artifacts; a human applies
 the emitted Hermes commands and copies or packages skills. Runtime
 `proposal_actions.py` does mutate the selected Kanban database after a gate
 decision.
+
+## Multiple pipelines in one Hermes installation
+
+Hermes boards are the hard queue boundary: each board has its own database,
+logs, and workspaces, and the dispatcher pins workers to their board. One gateway
+dispatcher sweeps every board, so another triage adds a board rather than another
+dispatcher. Give every config a unique `pipeline_id`, `board`, and
+`workspace_root`; generated skills, cron jobs, gate references, and retry keys
+are then disjoint. Roles may map to shared authenticated profiles or unique
+profiles in any combination.
+
+Gate replies are pipeline-qualified (`approve <pipeline_id>:<slug>`), and the
+rendered handler command passes the config path explicitly. A reference for one
+pipeline is rejected when another pipeline's config is loaded.
 
 ## Validation guarantees
 

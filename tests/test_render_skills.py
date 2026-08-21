@@ -26,37 +26,39 @@ class SkillMaterializationTests(unittest.TestCase):
                 template_root=ROOT / "skills" / "templates",
             )
 
-            self.assertEqual([item.skill for item in rendered], ["test-scout", "triage-orchestrator"])
+            self.assertEqual([item.skill for item in rendered], ["test-pipeline-test-scout", "triage-test-pipeline"])
             scout, orchestrator = rendered
             self.assertEqual(
                 scout.path,
-                project.resolve() / "work/scaffold/profiles/scout/skills/test-scout/SKILL.md",
+                project.resolve() / "work/scaffold/profiles/scout/skills/test-pipeline-test-scout/SKILL.md",
             )
             self.assertEqual(
                 orchestrator.path,
-                project.resolve() / "work/scaffold/profiles/orchestrator/skills/triage-orchestrator/SKILL.md",
+                project.resolve() / "work/scaffold/profiles/orchestrator/skills/triage-test-pipeline/SKILL.md",
             )
             text = scout.path.read_text(encoding="utf-8")
-            self.assertIn("name: test-scout", text)
+            self.assertIn("name: test-pipeline-test-scout", text)
             self.assertIn("# Triage scout: web", text)
             self.assertIn("Find concrete reports with sources.", text)
             self.assertIn('--assignee "orchestrator"', text)
             self.assertIn('hermes kanban --board "test-board" create', text)
-            self.assertIn('--skill triage-orchestrator', text)
+            self.assertIn('--skill triage-test-pipeline', text)
+            self.assertIn('test-pipeline:intake:web:', text)
             self.assertIn(str(project.resolve() / "work/vault/intake"), text)
             self.assertIn(str(project.resolve()), text)
             self.assertNotIn("TODO", text)
             self.assertNotIn("{{", text)
 
             frontmatter = yaml.safe_load(text.split("---", 2)[1])
-            self.assertEqual(frontmatter["name"], "test-scout")
+            self.assertEqual(frontmatter["name"], "test-pipeline-test-scout")
             orchestrator_text = orchestrator.path.read_text(encoding="utf-8")
             self.assertIn("test-board", orchestrator_text)
             self.assertIn(str(project.resolve()), orchestrator_text)
             self.assertIn("hermes send --to discord:briefs", orchestrator_text)
-            self.assertIn("python pre_gate_actions.py <slug>", orchestrator_text)
+            self.assertIn("python pre_gate_actions.py --config", orchestrator_text)
+            self.assertIn("approve     test-pipeline:<slug>", orchestrator_text)
             self.assertIn("Never create prep cards yourself", orchestrator_text)
-            self.assertIn("triage:<intake-id>:<slug>", orchestrator_text)
+            self.assertIn("test-pipeline:triage:<intake-id>:<slug>", orchestrator_text)
             self.assertIn("parented to the current intake task", orchestrator_text)
             self.assertIn("linked_kanban_tasks` frontmatter", orchestrator_text)
             self.assertIn("A worker may\nonly complete its own task", orchestrator_text)
@@ -80,7 +82,7 @@ class SkillMaterializationTests(unittest.TestCase):
             second = materialize_skills(cfg, **kwargs)
             self.assertEqual(snapshots, [item.path.read_bytes() for item in second])
             targets = skill_targets(cfg)
-            self.assertEqual(targets[0].live_destination, "$HERMES_HOME/profiles/scout/skills/test-scout/SKILL.md")
+            self.assertEqual(targets[0].live_destination, "$HERMES_HOME/profiles/scout/skills/test-pipeline-test-scout/SKILL.md")
             self.assertTrue(targets[0].path.is_absolute())
             skill_step = next(
                 step for step in build_deployment_plan(cfg).steps
@@ -102,7 +104,7 @@ class SkillMaterializationTests(unittest.TestCase):
 
         self.assertEqual(
             orchestrator.live_destination,
-            "$HERMES_HOME/skills/triage-orchestrator/SKILL.md",
+            "$HERMES_HOME/skills/triage-test-pipeline/SKILL.md",
         )
 
     def test_rejects_unresolved_placeholders_and_invalid_frontmatter(self):

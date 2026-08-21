@@ -36,6 +36,7 @@ class ConfigError(ValueError):
 VERSION_RE = re.compile(
     r"\A(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\Z"
 )
+PIPELINE_ID_RE = re.compile(r"\A[a-z0-9][a-z0-9_-]*\Z")
 
 
 def parse_version_triplet(value: str) -> tuple[int, int, int] | None:
@@ -133,6 +134,7 @@ class HermesProfile:
     description: str
     toolsets: tuple[str, ...] = ()
     owns_cron: bool = False
+    shared: bool = False
 
 
 @dataclass(frozen=True)
@@ -151,6 +153,7 @@ class HermesDeployment:
 @dataclass
 class TriageConfig:
     name: str
+    pipeline_id: str
     board: str
     workspace_root: str
     cost_gate_usd: float
@@ -164,6 +167,7 @@ class TriageConfig:
     roles: dict[str, str]
     gate: Gate
     hermes: HermesDeployment
+    config_path: str
     validation_warnings: tuple[str, ...] = ()
     raw: dict[str, Any] = field(default_factory=dict)
 
@@ -181,6 +185,21 @@ class TriageConfig:
         if name not in self.paths:
             raise ConfigError(f"Path {name!r} is referenced but not defined under `paths:`.")
         return self.paths[name]
+
+    @property
+    def workspace_path(self) -> Path:
+        path = Path(self.workspace_root)
+        return (path if path.is_absolute() else Path(self.hermes.project_root) / path).resolve()
+
+    @property
+    def orchestrator_skill(self) -> str:
+        return f"triage-{self.pipeline_id}"
+
+    def scout_skill(self, source: Source) -> str:
+        return f"{self.pipeline_id}-{source.skill}"
+
+    def cron_name(self, source: Source) -> str:
+        return f"{self.pipeline_id}-{source.id}-scout"
 
     @classmethod
     def load(cls, path: str | Path = "triage.yaml") -> "TriageConfig":
@@ -294,6 +313,7 @@ class TriageConfig:
                     description=str(profile_d.get("description", "")),
                     toolsets=tuple(str(value) for value in (profile_d.get("toolsets") or [])),
                     owns_cron=bool(profile_d.get("owns_cron", False)),
+                    shared=bool(profile_d.get("shared", False)),
                 )
             hermes = HermesDeployment(
                 min_version=str(hermes_d.get("min_version", "")),
@@ -307,6 +327,7 @@ class TriageConfig:
 
         cfg = cls(
             name=req("name"),
+            pipeline_id=str(data.get("pipeline_id") or req("board")),
             board=req("board"),
             workspace_root=data.get("workspace_root", "./work"),
             cost_gate_usd=float(data.get("cost_gate_usd", 5)),
@@ -320,6 +341,11 @@ class TriageConfig:
             roles=roles,
             gate=Gate(**(data.get("gate") or {})),
             hermes=hermes,
+            config_path=(
+                str(Path(config_path).resolve())
+                if config_path is not None
+                else str(Path(hermes.project_root) / "triage.yaml")
+            ),
             validation_warnings=tuple(warnings),
             raw=data,
         )
@@ -329,6 +355,12 @@ class TriageConfig:
     def validate(self) -> None:
         """Fail loudly with actionable messages. Called by the CLI `validate`."""
         errors: list[str] = []
+
+        if not PIPELINE_ID_RE.fullmatch(self.pipeline_id):
+            errors.append(
+                "pipeline_id must contain only lowercase letters, digits, underscores, or hyphens "
+                "and must start with a letter or digit."
+            )
 
         # Every route target must be a defined path.
         for value, target in self.route.map.items():

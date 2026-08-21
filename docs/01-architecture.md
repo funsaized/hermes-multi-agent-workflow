@@ -76,6 +76,22 @@ yet fully enforced by deterministic code.
 7. Delivery remains an orchestrator instruction after the final task; this repo
    has no deterministic completion hook that sends it automatically.
 
+## Multiple pipelines, one authenticated fleet
+
+Separate boards and workspace roots isolate task state and artifacts. A stable
+`pipeline_id` namespaces rendered skills, cron jobs, retry keys, and gate
+references. Abstract roles may map to existing profiles marked `shared: true`
+or to pipeline-specific profiles, so one pipeline can mix both.
+
+Exactly one gateway owns Kanban dispatch. Hermes sweeps every board and pins a
+spawned worker to its board, so another pipeline adds a board rather than a
+dispatcher. Rendered skills pass their exact config path to deterministic
+adapters; ambient `TRIAGE_CONFIG` remains a CLI convenience.
+
+This follows the official Hermes contracts for [multi-board Kanban](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban),
+[profiles](https://hermes-agent.nousresearch.com/docs/user-guide/profiles), and
+[profile-local cron](https://hermes-agent.nousresearch.com/docs/user-guide/features/cron).
+
 ## Where to extend (mechanism, not topic)
 
 - New scoring backend → add a mode in `scoring.py`, expose via `engine.py`.

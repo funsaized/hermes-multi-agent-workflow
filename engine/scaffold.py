@@ -61,7 +61,7 @@ class DeploymentPlan:
 def _cron_prompt(cfg: TriageConfig, source: Source) -> str:
     query = source.query.strip()
     return (
-        f"Run the {source.skill} skill for source {source.id!r}.\n"
+        f"Run the {cfg.scout_skill(source)} skill for source {source.id!r} in pipeline {cfg.pipeline_id!r}.\n"
         f"Search instructions:\n{query}\n"
         f"Create intake tasks on the {cfg.board!r} board for qualifying items."
     )
@@ -97,16 +97,8 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
             ),
         )
     )
-    steps.append(
-        CommandStep(
-            phase="board",
-            description=f"Make {cfg.board!r} the active Kanban board for gateway dispatch.",
-            argv=("hermes", "kanban", "boards", "switch", cfg.board),
-        )
-    )
-
     for name, profile in cfg.hermes.profiles.items():
-        if name == cfg.hermes.base_profile:
+        if name == cfg.hermes.base_profile or profile.shared:
             continue
         steps.append(
             CommandStep(
@@ -122,7 +114,7 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
             )
         )
     for name in cfg.hermes.profiles:
-        if name == cfg.hermes.base_profile:
+        if name == cfg.hermes.base_profile or cfg.hermes.profiles[name].shared:
             continue
         steps.append(
             CommandStep(
@@ -243,8 +235,8 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
                 argv=(
                     "hermes", "-p", source.profile, "cron", "create",
                     source.schedule, _cron_prompt(cfg, source),
-                    "--name", f"{cfg.name}-{source.id}-scout",
-                    "--skill", source.skill,
+                    "--name", cfg.cron_name(source),
+                    "--skill", cfg.scout_skill(source),
                     "--workdir", root,
                     "--deliver", "local",
                 ),
@@ -252,8 +244,15 @@ def build_deployment_plan(cfg: TriageConfig) -> DeploymentPlan:
             )
         )
 
-    gateway_profiles = [] if gateway == cfg.hermes.base_profile else [gateway]
-    gateway_profiles.extend(name for name in cfg.hermes.profiles if name in cron_profiles and name != gateway)
+    gateway_profiles = (
+        []
+        if gateway == cfg.hermes.base_profile or cfg.hermes.profiles[gateway].shared
+        else [gateway]
+    )
+    gateway_profiles.extend(
+        name for name in cfg.hermes.profiles
+        if name in cron_profiles and name != gateway and not cfg.hermes.profiles[name].shared
+    )
     for name in gateway_profiles:
         steps.append(
             CommandStep(

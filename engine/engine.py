@@ -59,14 +59,11 @@ class TriageEngine:
     # ----- paths / locations ----- #
 
     def _default_vault_dir(self) -> Path:
-        # Relative workspace roots resolve from the process cwd. Runtime callers
-        # are expected to run from hermes.project_root; pass a vault explicitly
-        # when a different location is required.
-        return Path(self.config.workspace_root).resolve() / "vault" / "items"
+        return self.config.workspace_path / "vault" / "items"
 
     def workspace_for(self, path_name: str, slug: str) -> Path:
         sub = self.config.get_path(path_name).workspace_subdir or path_name
-        return (Path(self.config.workspace_root).resolve() / sub / slug)
+        return self.config.workspace_path / sub / slug
 
     # ----- stage 2: dedup ----- #
 
@@ -118,6 +115,8 @@ class TriageEngine:
         if self.config.research.guide:
             rel = self.config.research.guide
             guide_path = Path(rel)
+            if not guide_path.is_absolute():
+                guide_path = Path(self.config.hermes.project_root) / guide_path
             guide = (
                 f"\n\n--- RESEARCH LANE GUIDE — from {rel} ---\n"
                 f"{guide_path.read_text(encoding='utf-8')}\n"
@@ -215,6 +214,8 @@ class TriageEngine:
             if not rel:
                 continue
             f = Path(rel)
+            if not f.is_absolute():
+                f = Path(self.config.hermes.project_root) / f
             if f.exists():
                 out.append(f"\n--- {label} — from {rel} ---\n{f.read_text(encoding='utf-8')}\n")
             else:

@@ -22,7 +22,7 @@ You execute the scaffolded commands and the manual install yourself.
 
 > **Runtime maturity boundary:** this runbook can establish the board, profiles,
 > skills, cron jobs, and gateways. It does not make the pipeline end-to-end
-> complete. Pre-gate route-card creation, triage-root completion, prep linking,
+> complete. Pre-gate route-card creation, triage-root completion,
 > inbound reply correlation, and final delivery triggering are still
 > orchestrator-skill responsibilities without deterministic integration tests.
 
@@ -61,7 +61,14 @@ those commands on preflight capability checks. Skill installation and
 model/auth remain `CHECKPOINT:` comments (or `argv: null` in JSON), not
 invented commands.
 
-The configured `base_profile` is treated as pre-existing: the plan does not
+For multiple triages in one Hermes installation, invoke each surface with that
+config's `--config` option. Keep one dispatcher: Hermes sweeps all boards, so
+the plan creates a board but does not switch the installation's active board.
+Profiles marked `shared: true` are reused without profile creation, default-cwd
+mutation, or gateway installation. Profiles without it follow the normal clone
+and authentication flow.
+
+The configured `base_profile` and profiles marked `shared: true` are treated as pre-existing: the plan does not
 recreate it, overwrite its default working directory, or install a second
 gateway for it. This example sets `gateway_profile: default`, reusing the root
 Discord gateway as the sole dispatcher and inbound human-gate listener.
@@ -194,7 +201,7 @@ The scaffold does not write live profile directories. Choose ONE of:
 - **Reviewed local copy.** `python -m cli.triage render-skills` writes
   `work/scaffold/profiles/<profile>/skills/<skill>/SKILL.md` and prints the
   matching live destination for each rendered file. The default profile's
-  orchestrator skill goes to `$HERMES_HOME/skills/triage-orchestrator/SKILL.md`.
+  orchestrator skill goes to `$HERMES_HOME/skills/triage-<pipeline_id>/SKILL.md`.
   Review the local file, then copy it to the printed live
   destination yourself.
 - **Profile distribution.** Package the rendered profile tree as a Hermes

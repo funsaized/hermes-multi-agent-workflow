@@ -41,12 +41,9 @@ class PlannerContractExtractionTests(unittest.TestCase):
             set(contracts),
             {
                 ("kanban", "boards", "create"),
-                ("kanban", "boards", "switch"),
-                ("profile", "create"),
                 ("config", "set"),
                 ("tools", "enable"),
                 ("cron", "create"),
-                ("gateway", "install"),
             },
         )
 

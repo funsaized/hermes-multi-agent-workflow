@@ -20,7 +20,7 @@ class ApprovalWithoutRootLinkTests(unittest.TestCase):
             vault.load.return_value = item
             engine.fulfillment_specs.return_value = [TaskSpec("build: item", "body", "builder")]
             engine.workspace_for.return_value = Path(tmp) / "workspace"
-            config = Mock(board="board", paths={"build": object()}, workspace_root=tmp)
+            config = Mock(board="board", paths={"build": object()}, workspace_root=tmp, pipeline_id="test")
             config.role_to_profile.return_value = "builder"
             store.connect.return_value = Mock()
             store.create_task.return_value = "t_build"
@@ -37,6 +37,12 @@ class ApprovalWithoutRootLinkTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertEqual(item.frontmatter["linked_kanban_tasks"], ["t_build"])
             store.comment.assert_not_called()
+
+    def test_qualified_reference_must_match_loaded_pipeline(self):
+        config = Mock(pipeline_id="alpha")
+        self.assertEqual(proposal_actions.item_slug("alpha:item", config), "item")
+        with self.assertRaisesRegex(ValueError, "targets pipeline 'beta'"):
+            proposal_actions.item_slug("beta:item", config)
 
 
 if __name__ == "__main__":

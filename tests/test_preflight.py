@@ -63,8 +63,8 @@ class FakeRunner:
             if command == ("skills", "list", "--enabled-only"):
                 skills = []
                 if profile == CONFIG.hermes.gateway_profile:
-                    skills.append("triage-orchestrator")
-                skills.extend(s.skill for s in CONFIG.sources if s.profile == profile)
+                    skills.append(CONFIG.orchestrator_skill)
+                skills.extend(CONFIG.scout_skill(s) for s in CONFIG.sources if s.profile == profile)
                 return CommandResult(0, "\n".join(skills), "")
             if command[:2] == ("tools", "list"):
                 surface = command[-1]
@@ -99,7 +99,7 @@ class FakeRunner:
                 return CommandResult(0, "Gateway is supervised by launchd (PID 7748)", "")
             if command == ("cron", "list", "--all"):
                 names = [
-                    f"{CONFIG.name}-{source.id}-scout"
+                    CONFIG.cron_name(source)
                     for source in CONFIG.sources
                     if source.profile == profile
                 ]

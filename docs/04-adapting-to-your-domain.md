@@ -21,6 +21,10 @@ These map 1:1 to `triage.yaml` blocks: sources, rubric, route, paths, gate.
 
 Edit in this order; run `python -m cli.triage validate` after each block.
 
+When sharing one Hermes installation, give each config a unique `pipeline_id`,
+board, and workspace root. Roles may reuse authenticated profiles or select
+pipeline-specific profiles where different tools, models, or memory are needed.
+
 1. **`name`, `board`, `workspace_root`, `cost_gate_usd`** — basic identity.
 2. **`sources`** — one entry per scout. Set `profile`, the desired rendered
    `skill` name, `schedule`, and a precise `query`.

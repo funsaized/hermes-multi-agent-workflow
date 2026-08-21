@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 def config_data() -> dict:
     return {
         "name": "test pipeline",
+        "pipeline_id": "test-pipeline",
         "board": "test-board",
         "workspace_root": "./work",
         "sources": [
@@ -177,7 +178,7 @@ class DeploymentPlannerTests(unittest.TestCase):
         create_index = commands.index(
             ("hermes", "kanban", "boards", "create", "test-board", "--name", "test pipeline", "--description", "Dedicated board for the test pipeline pipeline.", "--default-workdir", root)
         )
-        self.assertEqual(commands[create_index + 1], ("hermes", "kanban", "boards", "switch", "test-board"))
+        self.assertFalse(any(command[:4] == ("hermes", "kanban", "boards", "switch") for command in commands))
         self.assertIn(
             ("hermes", "profile", "create", "scout", "--clone-from", "default", "--no-alias", "--description", "Scheduled web scout."),
             commands,
@@ -191,7 +192,7 @@ class DeploymentPlannerTests(unittest.TestCase):
         cron = next(command for command in commands if command[:5] == ("hermes", "-p", "scout", "cron", "create"))
         self.assertEqual(cron[5], "15 * * * *")
         self.assertIn("Find concrete reports with sources.", cron[6])
-        self.assertEqual(cron[7:], ("--name", "test pipeline-web-scout", "--skill", "test-scout", "--workdir", root, "--deliver", "local"))
+        self.assertEqual(cron[7:], ("--name", "test-pipeline-web-scout", "--skill", "test-pipeline-test-scout", "--workdir", root, "--deliver", "local"))
         self.assertIn(("hermes", "-p", "orchestrator", "gateway", "install", "--start-now", "--start-on-login"), commands)
         self.assertIn(("hermes", "-p", "scout", "gateway", "install", "--start-now", "--start-on-login"), commands)
 
@@ -229,6 +230,17 @@ class DeploymentPlannerTests(unittest.TestCase):
         self.assertNotIn(("hermes", "-p", "default", "gateway", "install", "--start-now", "--start-on-login"), commands)
         self.assertNotIn(("hermes", "-p", "default", "config", "set", "terminal.cwd", str(ROOT.resolve())), commands)
         self.assertIn(("hermes", "-p", "default", "config", "set", "kanban.dispatch_in_gateway", "true"), commands)
+
+    def test_shared_profiles_are_reused_while_unique_profiles_are_created(self):
+        data = config_data()
+        data["hermes"]["profiles"]["scout"]["shared"] = True
+        cfg = TriageConfig.from_dict(data, config_path=ROOT / "triage.yaml")
+
+        commands = [step.argv for step in build_deployment_plan(cfg).steps if isinstance(step, CommandStep)]
+
+        self.assertFalse(any(command[:4] == ("hermes", "profile", "create", "scout") for command in commands))
+        self.assertFalse(any(command[:5] == ("hermes", "-p", "scout", "gateway", "install") for command in commands))
+        self.assertTrue(any(command[:4] == ("hermes", "profile", "create", "researcher") for command in commands))
 
     @patch("subprocess.run")
     def test_planner_never_runs_subprocess(self, run):

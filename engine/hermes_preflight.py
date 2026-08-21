@@ -16,9 +16,6 @@ from typing import Protocol
 from .config import TriageConfig, parse_version_triplet
 
 
-ORCHESTRATOR_SKILL = "triage-orchestrator"
-
-
 @dataclass(frozen=True)
 class CommandResult:
     returncode: int
@@ -310,9 +307,9 @@ def run_preflight(cfg: TriageConfig, runner: CommandRunner | None = None) -> Pre
         )
 
     required_skills: dict[str, set[str]] = {name: set() for name in cfg.hermes.profiles}
-    required_skills[cfg.hermes.gateway_profile].add(ORCHESTRATOR_SKILL)
+    required_skills[cfg.hermes.gateway_profile].add(cfg.orchestrator_skill)
     for source in cfg.sources:
-        required_skills[source.profile].add(source.skill)
+        required_skills[source.profile].add(cfg.scout_skill(source))
     for profile, skills in required_skills.items():
         if not skills:
             continue
@@ -373,7 +370,7 @@ def run_preflight(cfg: TriageConfig, runner: CommandRunner | None = None) -> Pre
                 )
             )
         result = runner.run(("hermes", "-p", source.profile, "cron", "list", "--all"))
-        job = f"{cfg.name}-{source.id}-scout"
+        job = cfg.cron_name(source)
         exists = result.returncode == 0 and _has_token(_output(result), job)
         checks.append(_check(f"resource.cron.{source.profile}.{job}", exists, f"Cron job {job!r} exists in profile {source.profile!r}.", f"Named cron job {job!r} is missing from profile {source.profile!r}."))
 

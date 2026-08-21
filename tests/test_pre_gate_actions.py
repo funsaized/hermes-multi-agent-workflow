@@ -18,7 +18,8 @@ class PreGateActionsTests(unittest.TestCase):
         ]
         store.connect.return_value = conn
         store.create_task.side_effect = ["t_one", "t_two"]
-        config = Mock(paths={"course": object()}, workspace_root=".")
+        config = Mock(paths={"course": object()}, workspace_root=".", pipeline_id="test")
+        config.hermes.project_root = "."
         config.role_to_profile.side_effect = {"curriculum_analyst": "analyst", "course_author": "author"}.__getitem__
 
         with (

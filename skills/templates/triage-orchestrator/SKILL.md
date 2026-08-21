@@ -1,11 +1,11 @@
 ---
-name: triage-orchestrator
+name: {{SKILL_NAME}}
 description: >
   The pipeline driver for the Hermes Multi-Agent Workflow. Triggered by new `intake`
   tasks on the triage board. Dedups, scores, fans out research, routes, proposes
   at the human gate, and on approval delegates fulfillment-chain creation to the
   handler. It calls engine/* for deterministic calculations/spec generation and
-  applies the remaining pre-gate board edges itself.
+  applies the research/root/route board edges that still require orchestration.
 metadata:
   hermes:
     tags: [triage, orchestrator]
@@ -16,14 +16,14 @@ metadata:
 > **Design contract:** fat engine, thin skill. Anything deterministic —
 > dedup lookup, applying the score threshold, route resolution, generating lane
 > and stage specs, choosing workspaces — is a call into `engine/`. You still apply
-> pre-gate specs and parent edges to the board; only the post-gate handler applies
-> and links fulfillment specs deterministically. Do not invent a pipeline shape;
+> research/root/route edges to the board; deterministic adapters apply and link
+> prep and fulfillment specs. Do not invent a pipeline shape;
 > it lives in `triage.yaml`. Read
 > `docs/01-architecture.md` and `docs/05-pipeline-stages.md`.
 
-All commands below run from `{{PROJECT_ROOT}}` with `triage.yaml` present and
-operate on board `{{BOARD}}`.
-`TRIAGE_CONFIG`, `TRIAGE_VAULT_DIR`, and `HERMES_KANBAN_DB` are honored.
+This skill owns pipeline `{{PIPELINE_ID}}`. All commands below run from
+`{{PROJECT_ROOT}}`, load `{{CONFIG_PATH}}` explicitly, and operate on board
+`{{BOARD}}`. `TRIAGE_VAULT_DIR` and `HERMES_KANBAN_DB` are honored.
 
 This is a dispatcher-spawned worker: use the injected `kanban_create`,
 `kanban_show`, `kanban_list`, `kanban_link`, and `kanban_complete` tools. Never
@@ -55,7 +55,7 @@ Read the report file. Parse it into candidates (`engine/intake_parser.py` shape)
 For each candidate, ask the engine for similar existing items:
 ```
 python -c "from engine.config import TriageConfig; from engine.engine import TriageEngine; \
-import json,sys; e=TriageEngine(TriageConfig.load()); \
+import json,sys; e=TriageEngine(TriageConfig.load(r'{{CONFIG_PATH}}')); \
 print(json.dumps([m.__dict__ for m in e.dedup(sys.argv[1])]))" "<candidate title + claim>"
 ```
 - `duplicate` → append the new source to the existing item, stop. Don't re-research.
@@ -89,13 +89,14 @@ triage root. Collect their ids, then call
 card with all five evidence ids as parents. Finally create one `route` card
 parented only to the classifier. Give every evidence, classifier, and route card
 the persistent project workspace `dir:{{PROJECT_ROOT}}`. Do not inherit
-`triage-orchestrator` into research cards; only the route card receives it.
+`{{SKILL_NAME}}` into research cards; only the route card receives it.
 Use one `kanban_create` call with the complete `parents` array for each fan-in;
 do not experiment with CLI parent syntax or create temporary cards.
 
 Every create call must use a retry-safe idempotency key scoped to the current
-intake task: `triage:<intake-id>:<slug>`,
-`research:<intake-id>:<slug>:<lane>`, and `route:<intake-id>:<slug>`.
+intake task: `{{PIPELINE_ID}}:triage:<intake-id>:<slug>`,
+`{{PIPELINE_ID}}:research:<intake-id>:<slug>:<lane>`, and
+`{{PIPELINE_ID}}:route:<intake-id>:<slug>`.
 Always issue those creates for the current intake and trust Hermes idempotency to
 return an existing active same-run card. Archived cards are historical evidence,
 never an active graph and never a reason to skip a candidate. Do not inspect the
@@ -115,7 +116,7 @@ item. If the path is `auto` (e.g. `shelve`), close out — no proposal.
 ### 6. Prep + propose (engine returns ordered prep specs)
 Apply the engine specs through the deterministic adapter:
 ```
-python pre_gate_actions.py <slug> --route-task "$HERMES_KANBAN_TASK"
+python pre_gate_actions.py --config "{{CONFIG_PATH}}" <slug> --route-task "$HERMES_KANBAN_TASK"
 ```
 Never create prep cards yourself. The adapter resolves each abstract
 `TaskSpec.role` through `spec.assignee(config)`, preserves its workspace, creates
@@ -133,10 +134,10 @@ other items while waiting — the gate is non-blocking.
 ### 7. Gate (human replies; you shell to the handler)
 Map the human's reply verb (see `gate:` in triage.yaml — NO leading slash) to:
 ```
-python proposal_actions.py approve     <slug>
-python proposal_actions.py shelve      <slug> --reason "..."
-python proposal_actions.py shelve-all  [--except <slug>]
-python proposal_actions.py modify      <slug> --change "..."
+python proposal_actions.py --config "{{CONFIG_PATH}}" approve     {{PIPELINE_ID}}:<slug>
+python proposal_actions.py --config "{{CONFIG_PATH}}" shelve      {{PIPELINE_ID}}:<slug> --reason "..."
+python proposal_actions.py --config "{{CONFIG_PATH}}" shelve-all  [--except <slug>]
+python proposal_actions.py --config "{{CONFIG_PATH}}" modify      {{PIPELINE_ID}}:<slug> --change "..."
 ```
 On `approve`, the handler reads `paths.<path>.fulfill` from triage.yaml and
 spawns the post-gate chain in a shared persistent workspace. You do nothing else.

@@ -36,19 +36,35 @@ from engine.engine import TriageEngine
 from engine.item_vault import ItemVault, utc_now_iso
 from engine.kanban_store import KanbanStore
 
-CONFIG_PATH = Path(os.environ.get("TRIAGE_CONFIG") or "triage.yaml")
 EXPECTED_STATUS = "awaiting_approval"
 
 
-def load_config() -> TriageConfig:
-    return TriageConfig.load(CONFIG_PATH)
+def load_config(config_path: str | Path | None = None) -> TriageConfig:
+    return TriageConfig.load(config_path or os.environ.get("TRIAGE_CONFIG") or "triage.yaml")
 
 
 def vault_dir(config: TriageConfig) -> Path:
     env = os.environ.get("TRIAGE_VAULT_DIR")
     if env:
         return Path(env).resolve()
-    return (Path(config.workspace_root).resolve() / "vault" / "items")
+    root = Path(config.workspace_root)
+    if not root.is_absolute():
+        root = Path(config.hermes.project_root) / root
+    return root.resolve() / "vault" / "items"
+
+
+def item_slug(reference: str, config: TriageConfig) -> str:
+    """Accept a local slug or validate a pipeline-qualified gate reference."""
+    if ":" not in reference:
+        return reference
+    pipeline_id, slug = reference.split(":", 1)
+    if pipeline_id != config.pipeline_id:
+        raise ValueError(
+            f"Gate reference targets pipeline {pipeline_id!r}; loaded config owns {config.pipeline_id!r}."
+        )
+    if not slug:
+        raise ValueError("Gate reference must include an item slug after the pipeline id.")
+    return slug
 
 
 def board_db(config: TriageConfig) -> Path:
@@ -89,8 +105,9 @@ def require_status(fm: dict[str, Any], slug: str) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def action_approve(slug: str) -> dict[str, Any]:
-    config = load_config()
+def action_approve(reference: str, config_path: str | Path | None = None) -> dict[str, Any]:
+    config = load_config(config_path)
+    slug = item_slug(reference, config)
     vault = ItemVault(vault_dir(config))
     engine = TriageEngine(config, vault)
 
@@ -129,6 +146,7 @@ def action_approve(slug: str) -> dict[str, Any]:
                 created_by="hermes-triage:human-action",
                 workspace_kind=spec.workspace_kind,
                 workspace_path=spec.workspace_path,
+                idempotency_key=f"{config.pipeline_id}:fulfill:{slug}:{spec.title}",
             )
             created.append({"task_id": task_id, "title": spec.title, "assignee": spec.assignee(config)})
             prev_id = task_id
@@ -146,12 +164,13 @@ def action_approve(slug: str) -> dict[str, Any]:
     fm.setdefault("linked_kanban_tasks", []).extend(c["task_id"] for c in created)
     item.body = append_note(body, f"✅ **Approved by human.** Spawned {path_name} chain: {chain_desc}.")
     vault.save(item)
-    return {"ok": True, "action": "approve", "slug": slug, "path": path_name, "chain": created,
+    return {"ok": True, "pipeline_id": config.pipeline_id, "action": "approve", "slug": slug, "path": path_name, "chain": created,
             "next_task_id": created[0]["task_id"], "next_assignee": created[0]["assignee"]}
 
 
-def action_shelve(slug: str, reason: str | None) -> dict[str, Any]:
-    config = load_config()
+def action_shelve(reference: str, reason: str | None, config_path: str | Path | None = None) -> dict[str, Any]:
+    config = load_config(config_path)
+    slug = item_slug(reference, config)
     vault = ItemVault(vault_dir(config))
     item = vault.load(slug)
     fm, body = item.frontmatter, item.body
@@ -178,9 +197,9 @@ def action_shelve(slug: str, reason: str | None) -> dict[str, Any]:
     return {"ok": True, "action": "shelve", "slug": slug, "reason": reason, "triage_task_closed": triage_id}
 
 
-def action_shelve_all(reason: str | None, exceptions: set[str] | None = None) -> dict[str, Any]:
+def action_shelve_all(reason: str | None, exceptions: set[str] | None = None, config_path: str | Path | None = None) -> dict[str, Any]:
     """Shelve every item currently `awaiting_approval` — 'say no to the rest'."""
-    config = load_config()
+    config = load_config(config_path)
     vault = ItemVault(vault_dir(config))
     exceptions = exceptions or set()
     shelved: list[str] = []
@@ -194,15 +213,16 @@ def action_shelve_all(reason: str | None, exceptions: set[str] | None = None) ->
             continue
         if item.frontmatter.get("status") != EXPECTED_STATUS:
             continue
-        action_shelve(slug, reason)
+        action_shelve(slug, reason, config_path)
         shelved.append(slug)
     return {"ok": True, "action": "shelve-all", "count": len(shelved), "shelved": shelved, "spared": sorted(exceptions)}
 
 
-def action_modify(slug: str, change: str) -> dict[str, Any]:
+def action_modify(reference: str, change: str, config_path: str | Path | None = None) -> dict[str, Any]:
     if not change.strip():
         die_input("--change cannot be empty.")
-    config = load_config()
+    config = load_config(config_path)
+    slug = item_slug(reference, config)
     vault = ItemVault(vault_dir(config))
     item = vault.load(slug)
     fm, body = item.frontmatter, item.body
@@ -258,6 +278,7 @@ def die_backend(msg: str) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="proposal_actions", description="Human-gate action handler (config-driven).")
+    parser.add_argument("--config", default=os.environ.get("TRIAGE_CONFIG") or "triage.yaml")
     sub = parser.add_subparsers(dest="action", required=True)
     p_app = sub.add_parser("approve"); p_app.add_argument("slug")
     p_shl = sub.add_parser("shelve"); p_shl.add_argument("slug"); p_shl.add_argument("--reason", default=None)
@@ -269,13 +290,13 @@ def main(argv: list[str] | None = None) -> None:
 
     try:
         if args.action == "approve":
-            result = action_approve(args.slug)
+            result = action_approve(args.slug, args.config)
         elif args.action == "shelve":
-            result = action_shelve(args.slug, args.reason)
+            result = action_shelve(args.slug, args.reason, args.config)
         elif args.action == "shelve-all":
-            result = action_shelve_all(args.reason, set(args.exceptions or []))
+            result = action_shelve_all(args.reason, set(args.exceptions or []), args.config)
         elif args.action == "modify":
-            result = action_modify(args.slug, args.change)
+            result = action_modify(args.slug, args.change, args.config)
         else:
             die_input(f"Unknown action: {args.action!r}"); return
     except SystemExit:

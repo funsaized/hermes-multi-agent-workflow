@@ -10,7 +10,7 @@ import yaml
 from .config import Source, TriageConfig
 
 
-ORCHESTRATOR_SKILL = "triage-orchestrator"
+ORCHESTRATOR_TEMPLATE = "triage-orchestrator"
 PLACEHOLDER_RE = re.compile(
     r"\bTODO\s*:|<!--\s*TODO\b|\{\{[^}]+\}\}|<your\b|<source-id>|<board from",
     re.IGNORECASE,
@@ -31,10 +31,7 @@ class SkillTarget:
 
 
 def _workspace_root(cfg: TriageConfig) -> Path:
-    configured = Path(cfg.workspace_root)
-    if not configured.is_absolute():
-        configured = Path(cfg.hermes.project_root) / configured
-    return configured.resolve()
+    return cfg.workspace_path
 
 
 def skill_targets(cfg: TriageConfig, output_root: str | Path | None = None) -> tuple[SkillTarget, ...]:
@@ -47,24 +44,24 @@ def skill_targets(cfg: TriageConfig, output_root: str | Path | None = None) -> t
     targets = [
         SkillTarget(
             profile=source.profile,
-            skill=source.skill,
+            skill=cfg.scout_skill(source),
             source_id=source.id,
-            path=(staging / source.profile / "skills" / source.skill / "SKILL.md").resolve(),
-            live_destination=f"$HERMES_HOME/profiles/{source.profile}/skills/{source.skill}/SKILL.md",
+            path=(staging / source.profile / "skills" / cfg.scout_skill(source) / "SKILL.md").resolve(),
+            live_destination=f"$HERMES_HOME/profiles/{source.profile}/skills/{cfg.scout_skill(source)}/SKILL.md",
         )
         for source in cfg.sources
     ]
     profile = cfg.hermes.gateway_profile
     live_destination = (
-        f"$HERMES_HOME/skills/{ORCHESTRATOR_SKILL}/SKILL.md"
+        f"$HERMES_HOME/skills/{cfg.orchestrator_skill}/SKILL.md"
         if profile == cfg.hermes.base_profile
-        else f"$HERMES_HOME/profiles/{profile}/skills/{ORCHESTRATOR_SKILL}/SKILL.md"
+        else f"$HERMES_HOME/profiles/{profile}/skills/{cfg.orchestrator_skill}/SKILL.md"
     )
     targets.append(
         SkillTarget(
             profile=profile,
-            skill=ORCHESTRATOR_SKILL,
-            path=(staging / profile / "skills" / ORCHESTRATOR_SKILL / "SKILL.md").resolve(),
+            skill=cfg.orchestrator_skill,
+            path=(staging / profile / "skills" / cfg.orchestrator_skill / "SKILL.md").resolve(),
             live_destination=live_destination,
         )
     )
@@ -97,7 +94,7 @@ def _render(template: str, replacements: dict[str, str], *, expected_name: str) 
 
 def _scout_replacements(cfg: TriageConfig, source: Source) -> dict[str, str]:
     return {
-        "SKILL_NAME": source.skill,
+        "SKILL_NAME": cfg.scout_skill(source),
         "SOURCE_ID": source.id,
         "BOARD": cfg.board,
         "QUERY": source.query.strip(),
@@ -105,6 +102,9 @@ def _scout_replacements(cfg: TriageConfig, source: Source) -> dict[str, str]:
         "PROJECT_ROOT": cfg.hermes.project_root,
         "PROFILE": source.profile,
         "ORCHESTRATOR_PROFILE": cfg.role_to_profile("orchestrator"),
+        "ORCHESTRATOR_SKILL": cfg.orchestrator_skill,
+        "PIPELINE_ID": cfg.pipeline_id,
+        "CONFIG_PATH": cfg.config_path,
     }
 
 
@@ -121,7 +121,7 @@ def materialize_skills(
         else Path(cfg.hermes.project_root) / "skills" / "templates"
     )
     scout_template = (templates / "triage-scout" / "SKILL.md").read_text(encoding="utf-8")
-    orchestrator_template = (templates / ORCHESTRATOR_SKILL / "SKILL.md").read_text(encoding="utf-8")
+    orchestrator_template = (templates / ORCHESTRATOR_TEMPLATE / "SKILL.md").read_text(encoding="utf-8")
     targets = skill_targets(cfg, output_root)
     sources = {source.id: source for source in cfg.sources}
     for target in targets:
@@ -138,6 +138,9 @@ def materialize_skills(
                     "BOARD": cfg.board,
                     "PROJECT_ROOT": cfg.hermes.project_root,
                     "GATE_TARGET": cfg.gate.target or cfg.gate.channel,
+                    "SKILL_NAME": cfg.orchestrator_skill,
+                    "PIPELINE_ID": cfg.pipeline_id,
+                    "CONFIG_PATH": cfg.config_path,
                 },
                 expected_name=target.skill,
             )

@@ -13,8 +13,8 @@ from engine.kanban_store import KanbanStore
 from proposal_actions import board_db, vault_dir
 
 
-def apply_prep(slug: str, route_task_id: str) -> dict:
-    config = TriageConfig.load(os.environ.get("TRIAGE_CONFIG") or "triage.yaml")
+def apply_prep(slug: str, route_task_id: str, config_path: str | None = None) -> dict:
+    config = TriageConfig.load(config_path or os.environ.get("TRIAGE_CONFIG") or "triage.yaml")
     vault = ItemVault(vault_dir(config))
     item = vault.load(slug)
     path_name = item.frontmatter.get("path")
@@ -37,7 +37,7 @@ def apply_prep(slug: str, route_task_id: str) -> dict:
                 created_by="hermes-triage:pre-gate",
                 workspace_kind=spec.workspace_kind,
                 workspace_path=spec.workspace_path,
-                idempotency_key=f"prep:{route_task_id}:{slug}:{spec.title}",
+                idempotency_key=f"{config.pipeline_id}:prep:{route_task_id}:{slug}:{spec.title}",
             )
             created.append({"task_id": task_id, "title": spec.title, "assignee": spec.assignee(config)})
             parent = task_id
@@ -50,17 +50,18 @@ def apply_prep(slug: str, route_task_id: str) -> dict:
         if card["task_id"] not in links:
             links.append(card["task_id"])
     vault.save(item)
-    return {"ok": True, "slug": slug, "path": path_name, "chain": created}
+    return {"ok": True, "pipeline_id": config.pipeline_id, "slug": slug, "path": path_name, "chain": created}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", default=os.environ.get("TRIAGE_CONFIG") or "triage.yaml")
     parser.add_argument("slug")
     parser.add_argument("--route-task", default=os.environ.get("HERMES_KANBAN_TASK"))
     args = parser.parse_args()
     if not args.route_task:
         parser.error("--route-task is required outside a dispatched Kanban worker")
-    print(json.dumps(apply_prep(args.slug, args.route_task), indent=2))
+    print(json.dumps(apply_prep(args.slug, args.route_task, args.config), indent=2))
     return 0
 
 

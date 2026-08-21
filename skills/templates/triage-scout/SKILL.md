@@ -51,7 +51,7 @@ dedicated Kanban model tools automatically and should use those instead of CLI.
    intake task through the CLI and parse the JSON result to confirm success:
 
    ```text
-   hermes kanban --board "{{BOARD}}" create "intake: {{SOURCE_ID}} <UTC-timestamp>" --body "<absolute report path>" --assignee "{{ORCHESTRATOR_PROFILE}}" --workspace "dir:{{PROJECT_ROOT}}" --created-by "{{PROFILE}}" --skill triage-orchestrator --idempotency-key "intake:{{SOURCE_ID}}:<UTC-timestamp>" --json
+   hermes kanban --board "{{BOARD}}" create "intake: {{SOURCE_ID}} <UTC-timestamp>" --body "<absolute report path>" --assignee "{{ORCHESTRATOR_PROFILE}}" --workspace "dir:{{PROJECT_ROOT}}" --created-by "{{PROFILE}}" --skill {{ORCHESTRATOR_SKILL}} --idempotency-key "{{PIPELINE_ID}}:intake:{{SOURCE_ID}}:<UTC-timestamp>" --json
    ```
 
    No parent means the card lands `ready`. `--workspace` pins the repository so
@@ -59,6 +59,9 @@ dedicated Kanban model tools automatically and should use those instead of CLI.
    same key; Hermes returns the existing non-archived task instead of duplicating
    it. If the command fails or its JSON does not contain a task id, report the
    failure and do not claim intake succeeded.
+
+   Pipeline contract: `{{PIPELINE_ID}}`, config `{{CONFIG_PATH}}`. Never create
+   this intake on another board, even if another pipeline uses the same source.
 
 ## Report format (contract with engine/intake_parser.py)
 
