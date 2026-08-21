@@ -42,14 +42,17 @@ no polling:
   order.
 
 `engine.research_specs()` records the supplied root parent on each evidence spec;
-`classifier_spec()` records every evidence task as a parent.
-`engine.fulfillment_specs()` returns ordered specs with empty parents;
-`proposal_actions.py::action_approve` creates those cards and links each later
-stage to its predecessor. `pre_gate_actions.py` similarly links the prep stages
-and appends a proposal card, so proposal delivery cannot run before prep. Route
-card creation and triage-root completion remain orchestrator-applied transitions.
+`classifier_spec()` records every evidence task as a parent; `route_spec()`
+parents the route card to the classifier. `intake_actions.py apply` creates that
+entire pre-gate graph deterministically. `engine.fulfillment_specs()` returns
+ordered specs with empty parents; `proposal_actions.py::action_approve` creates
+those cards and links each later stage to its predecessor. `pre_gate_actions.py`
+similarly links the prep stages and appends a proposal card, so proposal
+delivery cannot run before prep. The only board transition a model applies is
+completing ITS OWN task (a Hermes worker-protocol constraint) — e.g. the triage
+root completes itself after `intake_actions.py verify` confirms the graph.
 
-## Two board gotchas the engine already handles
+## Board gotchas the engine already handles
 
 1. **First post-gate task is deliberately `ready`, not `todo`.** The handler
    creates it with *no* parent and chains the rest. This keeps post-gate readiness
@@ -59,19 +62,37 @@ card creation and triage-root completion remain orchestrator-applied transitions
    `todo`. That's the whole promotion contract; respect it when you create cards
    yourself.
 
+3. **Idempotency interoperates with the Hermes CLI.** Cards created via
+   `hermes kanban ... --idempotency-key` carry native ids with the key in the
+   `idempotency_key` column. `create_task` looks that column up FIRST (ignoring
+   archived cards — history never satisfies a key) and only then falls back to
+   its deterministic hashed id, so an adapter re-run never duplicates a card a
+   cron scout already created.
+
+4. **Model routing is per-card, not per-profile.** When `roles:` or a stage
+   entry sets `model` / `provider` / `reasoning_effort`, the adapters write the
+   board's `model_override` / `provider_override` / `reasoning_effort` columns
+   (skipped safely on schemas without them). Profiles are never mutated.
+
 ## Dedicated board
 
 Each pipeline uses its own board (`board:` in `triage.yaml`), isolated from
 `default`, so triage cards don't mix with unrelated work. Named boards live at
-`~/.hermes/kanban/boards/<slug>/kanban.db`; the back-compat `default` board is
-`~/.hermes/kanban.db`. `proposal_actions.board_db()` resolves this for you and
-honors the dispatcher-injected `HERMES_KANBAN_DB`.
+`<hermes-home>/kanban/boards/<slug>/kanban.db`; the back-compat `default` board
+is `<hermes-home>/kanban.db`. The Hermes home is `$HERMES_HOME` when set, else
+the first existing of `~/.hermes` and `%LOCALAPPDATA%/hermes` (Windows installs
+use the latter). `engine.kanban_store.resolve_board_db()` handles all of this
+and honors the dispatcher-injected `HERMES_KANBAN_DB`; **never hardcode a board
+path** in a script or task body.
 
 ## Version note
 
-`kanban_store.py` writes the board schema directly (columns `id, title, body,
-assignee, status, priority, created_by, created_at, workspace_kind,
-workspace_path, consecutive_failures`, plus `task_links`, `task_comments`,
-`task_events`). If a future Hermes release changes these, update the INSERTs
-there. The dispatcher + cron live **inside the gateway** (the old standalone
+`kanban_store.py` writes the board schema directly. It REQUIRES the core
+columns (`id, title, body, assignee, status, priority, created_by, created_at,
+workspace_kind, workspace_path, consecutive_failures`) plus `task_links`,
+`task_comments`, `task_events`, and OPTIONALLY writes `idempotency_key`,
+`skills`, `model_override`, `provider_override`, and `reasoning_effort` when
+the installed schema has them (probed per connection, never assumed). If a
+future Hermes release changes the core columns, update the adapter. The
+dispatcher + cron live **inside the gateway** (the old standalone
 `hermes kanban daemon` is deprecated).

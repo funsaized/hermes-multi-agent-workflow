@@ -46,9 +46,27 @@ class TaskSpec:
     parents: list[str] = field(default_factory=list)
     workspace_kind: str = "scratch"
     workspace_path: str | None = None
+    skills: list[str] = field(default_factory=list)   # skill names pinned on the card
+    model_override: str | None = None                 # per-card model routing (roles/stage config)
+    provider_override: str | None = None
+    reasoning_effort: str | None = None
 
     def assignee(self, config: TriageConfig) -> str:
         return config.role_to_profile(self.role)
+
+    def store_kwargs(self, config: TriageConfig) -> dict:
+        """The exact keyword arguments adapters pass to KanbanStore.create_task."""
+        return {
+            "title": self.title,
+            "body": self.body,
+            "assignee": self.assignee(config),
+            "workspace_kind": self.workspace_kind,
+            "workspace_path": self.workspace_path,
+            "skills": self.skills or None,
+            "model_override": self.model_override,
+            "provider_override": self.provider_override,
+            "reasoning_effort": self.reasoning_effort,
+        }
 
 
 class TriageEngine:
@@ -64,6 +82,19 @@ class TriageEngine:
     def workspace_for(self, path_name: str, slug: str) -> Path:
         sub = self.config.get_path(path_name).workspace_subdir or path_name
         return self.config.workspace_path / sub / slug
+
+    # ----- model routing ----- #
+
+    def _model_overrides(self, role: str, stage: Stage | None = None) -> dict[str, str | None]:
+        """Stage-level model routing wins over role-level; both are optional."""
+        role_def = self.config.role_def(role)
+        return {
+            "model_override": (stage.model if stage and stage.model else role_def.model),
+            "provider_override": (stage.provider if stage and stage.provider else role_def.provider),
+            "reasoning_effort": (
+                stage.reasoning_effort if stage and stage.reasoning_effort else role_def.reasoning_effort
+            ),
+        }
 
     # ----- stage 2: dedup ----- #
 
@@ -142,6 +173,65 @@ class TriageEngine:
             parents=parents,
             workspace_kind="dir",
             workspace_path=str(Path(self.config.hermes.project_root).resolve()),
+            **self._model_overrides(role),
+        )
+
+    # ----- stage 4: pre-gate graph roots (triage barrier + route fan-in) ----- #
+
+    def triage_root_spec(self, slug: str, intake_task_id: str) -> TaskSpec:
+        """The per-item release barrier card, parented to the intake task.
+
+        The parent edge keeps this root `todo` while the intake worker's adapter
+        builds the full lane/classifier/route graph beneath it; the dispatcher
+        cannot spawn a second orchestrator into a half-built graph. Its worker
+        VERIFIES and completes itself — it never creates cards.
+        """
+        role = "orchestrator"
+        return TaskSpec(
+            title=f"triage: {slug}",
+            body=(
+                f"Release barrier for item `{slug}`. This is NOT a second orchestrator pass.\n\n"
+                f"Verify the research graph that the intake adapter already created:\n\n"
+                f"    python intake_actions.py --config \"{self.config.config_path}\" verify --slug {slug}\n\n"
+                "If it reports ok, complete this task (kanban_complete) to release the evidence "
+                "lanes together. Create NOTHING. If it reports missing pieces, block this task "
+                "with the adapter's JSON output as the reason — do not rebuild the graph yourself."
+            ),
+            role=role,
+            parents=[intake_task_id],
+            workspace_kind="dir",
+            workspace_path=str(Path(self.config.hermes.project_root).resolve()),
+            **self._model_overrides(role),
+        )
+
+    def route_spec(self, slug: str, classifier_task_id: str) -> TaskSpec:
+        """The route fan-in card, parented only to the classifier.
+
+        The only judgment here is READING the classifier value from the parent
+        result; path resolution and prep-chain creation are deterministic in
+        `pre_gate_actions.py`.
+        """
+        role = "orchestrator"
+        return TaskSpec(
+            title=f"route: {slug}",
+            body=(
+                f"Route resolution for item `{slug}`.\n\n"
+                f"Read the parent classifier's result and extract its "
+                f"`{self.config.route.classifier}` value (one of "
+                f"{sorted(self.config.route.map)}). Then run the deterministic adapter:\n\n"
+                f"    python pre_gate_actions.py --config \"{self.config.config_path}\" {slug} "
+                f"--classification \"<value>\" --route-task \"$HERMES_KANBAN_TASK\"\n\n"
+                "It resolves the path, writes it on the item, creates the prep chain and the "
+                "proposal card (or closes out an auto path such as shelve). Confirm the JSON "
+                "response, then complete this task. Never create prep or proposal cards yourself. "
+                "If the classifier result lacks the value, block this task with a reason."
+            ),
+            role=role,
+            parents=[classifier_task_id],
+            workspace_kind="dir",
+            workspace_path=str(Path(self.config.hermes.project_root).resolve()),
+            skills=[self.config.orchestrator_skill],
+            **self._model_overrides(role),
         )
 
     # ----- stage 5: route ----- #
@@ -184,10 +274,21 @@ class TriageEngine:
             )
         injected = self._injected_constraints(path)
         for i, stage in enumerate(stages):
+            delivery_note = ""
+            if persistent and i == len(stages) - 1:
+                delivery_note = (
+                    f"\n--- FINAL DELIVERY (deterministic adapter) ---\n"
+                    f"This is the final fulfillment stage. Finish the stage's own work, then run:\n\n"
+                    f"    python delivery_actions.py --config \"{self.config.config_path}\" {slug}\n\n"
+                    "The adapter locates the configured deliverable in this workspace, sends it to "
+                    "the configured gate target via `hermes send`, and records delivery on the item. "
+                    "Complete this task only after it returns ok. If it exits non-zero, block this "
+                    "task with its JSON error — do NOT send manually or improvise a path.\n"
+                )
             body = (
                 f"Stage `{stage.stage}` ({phase}) for item `{slug}` on the `{path_name}` path.\n"
                 f"Read the item file for the approved proposal, sources, score, and human notes.\n"
-                f"{ws_note}{injected}"
+                f"{ws_note}{delivery_note}{injected}"
             )
             specs.append(TaskSpec(
                 title=f"{stage.stage}: {slug}",
@@ -198,6 +299,7 @@ class TriageEngine:
                 parents=[],
                 workspace_kind=ws_kind,
                 workspace_path=ws_path,
+                **self._model_overrides(stage.role, stage),
             ))
         return specs
 

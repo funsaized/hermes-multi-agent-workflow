@@ -23,6 +23,20 @@ from .frontmatter import dumps_frontmatter, parse_frontmatter
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,79}$")
 
 
+def slugify(title: str) -> str:
+    """The ONE canonical slug derivation for candidate titles.
+
+    Idempotency keys, vault filenames, and card titles all key off the slug, so
+    every pipeline step must derive it identically. Do not re-implement this in
+    a skill or script — divergent slugs orphan items and duplicate board graphs.
+    """
+    s = title.lower()
+    s = re.sub(r"\([^)]*\)", "", s)          # drop parentheticals
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = s.strip("-")[:80].rstrip("-")
+    return s or "untitled"
+
+
 @dataclass
 class Item:
     path: Path

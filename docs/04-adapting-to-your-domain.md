@@ -44,9 +44,16 @@ pipeline-specific profiles where different tools, models, or memory are needed.
    standards and output contracts; its contents are inlined into every lane card.
 6. **`route.map`** — classification value → path name.
 7. **`paths`** — one per route outcome. Define `prep`, `fulfill`, templates,
-   workspace bucket, and (where relevant) `scope_rails` / `deliverable_spec`.
-   Mark dead-end outcomes `auto: true`.
-8. **`roles`** — map every role you used to a real profile name.
+   workspace bucket, `scope_rails` / `deliverable_spec`, and the `deliverable:`
+   file the delivery hook sends (a filename or glob inside the item workspace —
+   keep it in sync with the deliverable spec). Mark dead-end outcomes
+   `auto: true`.
+8. **`roles`** — map every role you used to a real profile name (string form),
+   or to `{profile, model, provider, reasoning_effort}` to route that role's
+   cards to a specific model without touching profiles. Stage entries accept
+   the same model keys and win over the role level. Typical split: cheap
+   models for mechanical lanes/drafting, frontier models for review and
+   classification.
 9. **`gate`** — channel, exact delivery target, and reply verbs.
 
 ## Step 2 — Rewrite the path templates (`paths/`)
@@ -89,11 +96,15 @@ set in `triage.yaml`.
 
 ```bash
 python -m cli.triage validate            # config consistent?
-python -m unittest discover -s tests     # engine still correct?
+python -m unittest discover -s tests     # engine + adapters + synthetic e2e eval
+python scripts/run_synthetic_eval.py     # the e2e replay standalone, with a report
 ```
 
 Add domain tests: a couple of scoring cases at/below your threshold, and a route
 case per classification value. Copy the patterns in `tests/test_engine_core.py`.
+For pipeline-shape changes, extend `tests/pipeline_fixtures.py` and the
+scenarios in `scripts/run_synthetic_eval.py` so the end-to-end replay covers
+your domain's routes.
 
 ## Step 6 — Stand it up
 

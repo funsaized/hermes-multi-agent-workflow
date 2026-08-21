@@ -1,6 +1,7 @@
 # Deliverable spec: tutorial
 
-Produce a self-contained Markdown tutorial with:
+Produce a self-contained Markdown tutorial as `tutorial.md` (the primary file
+the delivery hook sends), with:
 
 1. the engineering problem, learner prerequisites, and observable outcome;
 2. a precise graph-kind definition and minimal node/edge/provenance model;

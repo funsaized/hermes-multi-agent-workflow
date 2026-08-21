@@ -18,11 +18,17 @@ class PreGateActionsTests(unittest.TestCase):
         ]
         store.connect.return_value = conn
         store.create_task.side_effect = ["t_one", "t_two", "t_propose"]
-        path = Mock(propose_role="orchestrator", proposal_template="proposal.md")
+        path = Mock(propose_role="orchestrator", proposal_template="proposal.md", auto=False)
         config = Mock(paths={"course": path}, workspace_root=".", workspace_path=pre_gate_actions.Path("work"), pipeline_id="test")
         config.hermes.project_root = "."
         config.get_path.return_value = path
         config.role_to_profile.side_effect = {"curriculum_analyst": "analyst", "course_author": "author", "orchestrator": "default"}.__getitem__
+        from engine.config import RoleDef
+        config.role_def.side_effect = {
+            "curriculum_analyst": RoleDef(profile="analyst"),
+            "course_author": RoleDef(profile="author"),
+            "orchestrator": RoleDef(profile="default"),
+        }.__getitem__
         config.gate.target = "discord:123"
 
         with (

@@ -5,10 +5,12 @@ box, but going live is still a human-driven sequence of Hermes 0.20 commands.
 The CLI and engine produce typed metadata, validate it, run a read-only preflight
 against your installed Hermes, render a dry-run plan, and write local copies
 of profile-specific skills. These deployment surfaces do not mutate your live
-Hermes home — `python -m cli.triage install` is intentionally a stub. Runtime
-`proposal_actions.py` is separate and does mutate the configured board and vault.
-`scout_actions.py` is the required scout submission edge: it scopes reports to
-the configured workspace and creates the first intake card through the CLI.
+Hermes home — `python -m cli.triage install` is intentionally a stub. At
+runtime the deterministic adapters (`intake_actions.py`, `pre_gate_actions.py`,
+`proposal_actions.py`, `delivery_actions.py`) are separate and do mutate the
+configured board and vault. `scout_actions.py` is the required scout submission
+edge: it scopes reports to the configured workspace and creates the first
+intake card through the CLI.
 
 The split:
 
@@ -23,10 +25,12 @@ The split:
 You execute the scaffolded commands and the manual install yourself.
 
 > **Runtime maturity boundary:** this runbook can establish the board, profiles,
-> skills, cron jobs, and gateways. It does not make the pipeline end-to-end
-> complete. Pre-gate route-card creation, triage-root completion,
-> inbound reply correlation, and final delivery triggering are still
-> orchestrator-skill responsibilities without deterministic integration tests.
+> skills, cron jobs, and gateways. The pipeline's deterministic spine —
+> pre-gate graph construction, route resolution, prep/fulfillment chains, and
+> final delivery — is adapter-applied and covered by the synthetic eval
+> (`python scripts/run_synthetic_eval.py`). Inbound gate-reply correlation
+> (mapping your Discord reply to a `proposal_actions.py` invocation) remains an
+> orchestrator-skill responsibility without a deterministic integration test.
 
 > Commands assume `hermes` is on `PATH`. Hermes 0.20 uses
 > `hermes -p <profile>` to target a profile; aliases are optional convenience
@@ -311,11 +315,19 @@ hermes -p <scout> chat --skills <scout-skill> -q "Run one sweep now, following t
 hermes kanban --board <board> list       # watch cards appear + promote
 ```
 
-Intended flow: `intake → (dedup/score) → research lanes (parallel) → route →
-prep → propose` → **proposal in Discord #briefs** → you reply `approve <slug>` →
-`fulfill chain` → deliverable in the configured target. A successful deployment
-must additionally prove the model-applied pre-gate/root/reply hooks described at
-the top of this runbook. Confirm the first post-gate card is `ready` (not `todo`).
+Intended flow: `intake → (plan/score/apply via intake_actions.py) → research
+lanes (parallel) → route → prep → propose` → **proposal in Discord #briefs** →
+you reply `approve <slug>` → `fulfill chain` → `delivery_actions.py` sends the
+deliverable to the configured target. Before any live smoke test, run the
+offline replay of that exact shape:
+
+```bash
+python scripts/run_synthetic_eval.py     # 12 scenarios; must be 12/12
+```
+
+The remaining model-applied step to prove live is inbound gate-reply handling
+(the orchestrator mapping your Discord reply to `proposal_actions.py`).
+Confirm the first post-gate card is `ready` (not `todo`).
 
 ## 14. Go live
 
@@ -329,9 +341,10 @@ their respective gateways being up.
 
 ## Day-to-day
 
-- **Watch:** `hermes kanban --board <board> list`. Proposals and final deliveries
-  appear in Discord `#briefs` only when the orchestrator actually calls
-  `hermes send`; board status changes alone are silent.
+- **Watch:** `hermes kanban --board <board> list`. Proposals reach Discord
+  `#briefs` when the proposal worker runs `hermes send`; final deliveries are
+  sent by `delivery_actions.py` from the last fulfillment stage. Board status
+  changes alone are silent.
 - **Decide:** reply (no slash) `approve <slug>` / `shelve <slug>: reason` /
   `modify <slug>: change`; `reject the rest` (or `python proposal_actions.py
   shelve-all`) clears the queue.

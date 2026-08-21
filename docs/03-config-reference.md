@@ -9,7 +9,7 @@ Every key in `triage.yaml`. The typed view is `engine/config.py`; the validator 
 |---|---|---|
 | `name` | str | Pipeline slug, for logs. |
 | `pipeline_id` | str | Stable runtime namespace. Lowercase letters, digits, `_`, and `-` only. Rendered skill names, cron names, gate references, and retry keys derive from it. Defaults to `board` for legacy configs. |
-| `board` | str | Kanban board slug. `default` → `~/.hermes/kanban.db`; else `~/.hermes/kanban/boards/<board>/kanban.db`. |
+| `board` | str | Kanban board slug. `default` → `<hermes-home>/kanban.db`; else `<hermes-home>/kanban/boards/<board>/kanban.db`. The Hermes home is `$HERMES_HOME` when set, else the first existing of `~/.hermes` and `%LOCALAPPDATA%/hermes` (Windows). Adapters resolve this via `engine.kanban_store.resolve_board_db`; the dispatcher-injected `HERMES_KANBAN_DB` always wins. |
 | `workspace_root` | path | Base for the item vault and per-item persistent workspaces. Relative values resolve from `hermes.project_root`. Use a different root for every pipeline. |
 | `cost_gate_usd` | number | Threshold read by `scripts/cost_report.py`. The current pipeline does not invoke that script or enforce pause/notify behavior automatically. |
 
@@ -109,23 +109,43 @@ A map of path name → definition. A path is one outcome of routing.
 
 | Key | Meaning |
 |---|---|
-| `prep[]` | Ordered stages BEFORE the gate. Each `{stage, role}`. `pre_gate_actions.py` links them sequentially and appends the proposal card. |
+| `prep[]` | Ordered stages BEFORE the gate. Each `{stage, role}` plus optional model keys (below). `pre_gate_actions.py` links them sequentially and appends the proposal card. |
 | `propose.role` | Who runs the dependency-gated card that drafts + sends the proposal (usually `orchestrator`). |
 | `propose.template` | Markdown proposal template under `paths/proposals/`. |
-| `fulfill[]` | Stages AFTER approval. Each `{stage, role}`. Run in a shared persistent workspace. |
+| `fulfill[]` | Stages AFTER approval. Each `{stage, role}` plus optional model keys. Run in a shared persistent workspace; the engine appends the deterministic `delivery_actions.py` instruction to the FINAL stage's task body. |
 | `workspace_subdir` | Bucket under `workspace_root` for this path's per-item dirs (e.g. `builds`). Defaults to the path name. |
 | `scope_rails` | Markdown prompt-policy file inlined into each worker task. It guides the model but is not a sandbox or technical enforcement boundary. |
 | `deliverable_spec` | Markdown file (under `paths/specs/`) inlined into workers — output format. |
-| `auto` | `true` → terminal path, no work (e.g. `shelve`). |
+| `deliverable` | Filename or glob, resolved inside the item's persistent workspace, naming the PRIMARY file `delivery_actions.py` sends at final delivery. It must match exactly one file; without it the adapter falls back to a single `deliverable.*` / `DELIVERABLE.*` file and otherwise fails loudly. |
+| `auto` | `true` → terminal path, no work (e.g. `shelve`). `pre_gate_actions.py` closes the item out (`status: auto_<path>`) without creating cards. |
 
 `stage` is the task-title prefix and the conventional name workers key off. `role`
-is mapped to a profile.
+is mapped to a profile. A stage entry may also set `model`, `provider`, and/or
+`reasoning_effort` to route that one card; stage-level values win over the
+role-level values below.
 
 ## `roles:`
 
-Map abstract role → real Hermes profile. Every role used anywhere (research,
-prep, fulfill, propose) must appear here (validated). This indirection lets you
+Map abstract role → runtime binding. Every role used anywhere (research, prep,
+fulfill, propose) must appear here (validated). This indirection lets you
 rename/merge profiles without touching paths.
+
+Two forms are accepted per role:
+
+```yaml
+roles:
+  orchestrator: default                                   # string: profile name
+  researcher: { profile: researcher, model: <model-id>,   # mapping: adds per-card
+                provider: <provider>, reasoning_effort: low }  # model routing
+```
+
+The mapping form's `model` / `provider` / `reasoning_effort` are written to the
+board's `model_override` / `provider_override` / `reasoning_effort` columns on
+every card the adapters create for that role. Profiles are never mutated, so
+adding or removing a model line does not disturb pipelines already running; on
+board schemas without those columns the values are skipped safely. Use this to
+run mechanical roles (scout lanes, drafting) on cheap models and judgment-heavy
+roles (review, classification) on frontier models.
 
 ## `gate:`
 
@@ -189,9 +209,20 @@ them in this order:
 
 This split keeps deployment mutations out of these CLI surfaces. Configuration,
 planning, preflight, and rendering produce reviewable artifacts; a human applies
-the emitted Hermes commands and copies or packages skills. Runtime
-`proposal_actions.py` does mutate the selected Kanban database after a gate
-decision.
+the emitted Hermes commands and copies or packages skills. At runtime the four
+deterministic adapters (`intake_actions.py`, `pre_gate_actions.py`,
+`proposal_actions.py`, `delivery_actions.py`) mutate the selected Kanban
+database and item vault — they are the ONLY sanctioned write path besides the
+injected `kanban_*` worker tools.
+
+## Synthetic eval
+
+`python scripts/run_synthetic_eval.py` replays a full pipeline cycle (intake →
+graph → barrier → route → gate → fulfillment → delivery, including the auto
+path, unknown-classification failure, idempotent re-runs, and model routing) on
+a temp board with the live Hermes schema — no model, network, or live install.
+It also runs as part of `python -m unittest discover -s tests`. Run it after
+any engine, adapter, or skill-template change.
 
 ## Multiple pipelines in one Hermes installation
 

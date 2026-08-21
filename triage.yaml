@@ -253,6 +253,7 @@ paths:
     workspace_subdir: research-briefs
     scope_rails: paths/rails/research-brief.md
     deliverable_spec: paths/specs/research-brief.md
+    deliverable: brief.md
 
   explainer:
     prep:
@@ -267,6 +268,7 @@ paths:
     workspace_subdir: explainers
     scope_rails: paths/rails/explainer.md
     deliverable_spec: paths/specs/explainer.md
+    deliverable: explainer.md
 
   hands_on_lab:
     prep:
@@ -282,6 +284,7 @@ paths:
     workspace_subdir: hands-on-labs
     scope_rails: paths/rails/hands-on-lab.md
     deliverable_spec: paths/specs/hands-on-lab.md
+    deliverable: README.md
 
   full_course:
     prep:
@@ -299,6 +302,7 @@ paths:
     workspace_subdir: courses
     scope_rails: paths/rails/full-course.md
     deliverable_spec: paths/specs/full-course.md
+    deliverable: course/README.md
 
   adaptive_curriculum:
     prep:
@@ -315,12 +319,20 @@ paths:
     workspace_subdir: adaptive-curricula
     scope_rails: paths/rails/adaptive-curriculum.md
     deliverable_spec: paths/specs/adaptive-curriculum.md
+    deliverable: README.md
 
   shelve:
     auto: true
 
 # Abstract roles keep path intent readable. Several deliberately share a profile;
 # split them only when different models, credentials, or toolsets are necessary.
+#
+# A role may also bind per-card model routing (applied via the board's
+# model_override/provider_override/reasoning_effort columns; profiles are never
+# mutated, so enabling this does not disturb running pipelines):
+#   researcher: { profile: researcher, model: <cheap-model-id>, reasoning_effort: low }
+# Stage entries accept the same keys and win over the role-level values:
+#   - { stage: verify_brief, role: reviewer, model: <frontier-model-id> }
 roles:
   orchestrator: default
   researcher: researcher

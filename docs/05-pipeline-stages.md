@@ -33,53 +33,59 @@ detect** — no dedup/score/route.
   The configured list lives in `hermes.profiles.<name>.toolsets` in
   `triage.yaml`.
 
-## Stage 2 — Dedup (orchestrator → engine)
+## Stages 2–4 — Dedup, score, fan-out (`intake_actions.py`)
 
-For each candidate, `TriageEngine.dedup(text)` ranks existing vault items.
-`duplicate` → append source, stop. `possible` → flag, continue. `new` → create
-the item file (`ItemVault.create_item`, `status: triage`).
+The intake worker runs exactly three steps:
 
-- Code: `engine/dedup.py`, `engine/item_vault.py`.
+1. `python intake_actions.py --config <cfg> plan --intake <report>` — read-only.
+   Parses candidates, derives canonical slugs (`engine.item_vault.slugify` — the
+   ONE slug implementation; never hand-roll one), ranks vault similarity per
+   candidate, and prints the rubric prompt.
+2. The model judges per-dimension scores (its ONE intake judgment) and writes
+   `<report>.scores.json`.
+3. `python intake_actions.py --config <cfg> apply --intake <report> --scores
+   <scores> --intake-task $HERMES_KANBAN_TASK` — validates scores through
+   `TriageEngine.score()` (maxes + threshold), merges `duplicate` candidates
+   into their existing items, creates vault items (below threshold →
+   `status: shelved_below_threshold`, **without bothering the human**), and for
+   each advancing item creates the triage root, evidence lanes, classifier
+   fan-in, and route card.
 
-## Stage 3 — Score (orchestrator judgment + engine)
+Graph guarantees `apply` enforces (these used to be model-applied; regressions
+here are caught by the synthetic eval):
 
-The orchestrator scores each rubric dimension (using `TriageEngine.rubric_prompt()`)
-and hands the breakdown to `TriageEngine.score()`, which applies maxes + threshold.
-Below threshold → the orchestrator skill says to **shelve without bothering the
-human**. This is model-applied behavior, not an engine side effect. Write both
-`score` and `score_breakdown` to the item file either way.
+- The triage root is parented to the current intake card, so it stays `todo`
+  until the intake completes — a second orchestrator can never race a
+  half-built graph.
+- The root's id is written to the item's `linked_kanban_tasks` BEFORE the lane
+  fan-out (the durable audit link gate actions read).
+- Every card uses an intake-scoped idempotency key
+  (`<pipeline>:triage|research|route:<intake-id>:<slug>[:<lane>]`) that
+  interoperates with `hermes kanban`-created cards; re-running `apply` is safe.
+- Archived cards are audit history and never satisfy a new intake graph.
+- The route card is parented only to the classifier and carries the
+  orchestrator skill; lanes and classifier do not.
 
-- Code: `engine/scoring.py`.
-
-## Stage 4 — Research fan-out (engine generates lane specs)
-
-`TriageEngine.research_specs(slug, triage_id)` returns parallel evidence specs,
-all parented to the supplied triage id. `classifier_spec(slug, evidence_ids)`
-returns a classifier parented to every evidence lane; the route card is parented
-to that classifier. All use the project `dir` workspace so they can read the
-vault and domain files. The intake orchestrator creates that triage root parented
-to its current intake card, immediately records its id in the item's
-`linked_kanban_tasks`, then creates this graph. This keeps the root in `todo` until the graph
-is complete and prevents a second orchestrator from racing the fan-out. Once the
-intake completes, the triage worker verifies the existing graph, creates nothing,
-and completes itself to release the evidence lanes together. Hermes workers may only
-complete their own task id. The engine does not create the route card or apply
-these board transitions, so this remains model-applied orchestration rather than
-an engine guarantee. All graph creates use intake-scoped idempotency keys.
-Archived cards are audit history and never satisfy a new intake graph.
-Dispatcher-spawned orchestrators use injected `kanban_*` tools; cron scouts are
-the only workers that create cards through the Kanban CLI.
+The `triage:` release barrier then runs
+`python intake_actions.py --config <cfg> verify --slug <slug>` (read-only) and
+completes ITSELF — Hermes workers may only complete their own task id, which is
+the one board transition that stays model-applied.
 
 - ⚠️ **This is the fan-in pattern** — the classifier auto-fires when the last
   evidence lane finishes; route follows classifier. No polling. See docs/02.
+- Code: `intake_actions.py`, `engine/dedup.py`, `engine/item_vault.py`,
+  `engine/scoring.py`, `engine/engine.py`.
 
-## Stage 5 — Route (engine)
+## Stage 5 — Route (`pre_gate_actions.py --classification`)
 
-The classifier lane emits a value (`route.classifier`). `TriageEngine.route(value)`
-maps it to a path name; the orchestrator writes `path: <name>` on the item. An
-`auto` path (e.g. `shelve`) ends here.
+The classifier lane emits a value (`route.classifier`). The route worker READS
+that value from the classifier's result — its only judgment — and passes it to
+`pre_gate_actions.py --classification <value>`, which resolves the path via
+`TriageEngine.route()` (unknown values raise, loudly), writes `path:` and
+`classified_as:` on the item, and closes out `auto` paths (e.g. `shelve`,
+`status: auto_shelve`) with no cards.
 
-- Code: `engine/routing.py`.
+- Code: `engine/routing.py`, `pre_gate_actions.py`.
 
 ## Stages 6–7 — Prep + propose
 
@@ -124,9 +130,27 @@ chain via `TriageEngine.fulfillment_specs()`.
 - ⚠️ **Gotcha — first stage `ready`.** The first fulfillment card has no blocking
   parent so it lands `ready`; the rest chain off it. This deliberately avoids
   depending on the lifecycle of the pre-gate triage/root card.
-- The orchestrator skill instructs a later model turn to deliver after the final
-  stage. There is no deterministic completion hook or correlation adapter in
-  this repository that guarantees the send.
+
+## Stage 12 — Delivery (`delivery_actions.py`)
+
+The engine appends a deterministic instruction to the FINAL fulfillment stage's
+task body: run `python delivery_actions.py --config <cfg> <slug>`. The adapter
+
+1. requires the item to be `approved` (the gate is real — unapproved work is
+   refused; a `delivered` item is an idempotent no-op),
+2. resolves the deliverable inside the persistent workspace —
+   `paths.<path>.deliverable` (filename or glob, exactly one match), falling
+   back to a single `deliverable.*` file, otherwise failing with a listing of
+   what IS in the workspace,
+3. sends it through the configured Hermes channel:
+   `hermes send --to <gate.target> --file <deliverable>` — the same messaging
+   contract as the proposal send, and
+4. marks the item `delivered` and comments on the triage root.
+
+If it exits non-zero the worker blocks its task with the JSON error. Nobody
+sends deliverables by hand; setting a status field notifies no one (that gotcha
+produced the origin system's silent-proposal incident, and delivery had the
+same hole until this hook).
 
 ## Cost gate (cross-cutting)
 
@@ -136,11 +160,23 @@ engine do not call it automatically, so pause/notify policy is not currently
 enforced. It degrades to "telemetry unavailable" if your Hermes build doesn't
 expose cost columns; adjust the SQL there for your schema.
 
+## Synthetic eval (cross-cutting)
+
+`python scripts/run_synthetic_eval.py` replays every stage above — including
+the auto path, an unknown classification, idempotent re-runs, model routing,
+and both delivery failure modes — against a temp board using the live Hermes
+schema, with the model's judgments played by fixtures. It also runs inside
+`python -m unittest discover -s tests`. Any change to a stage's guarantees must
+keep it green.
+
 ## Failure handling
 
 - Worker crash → the dispatcher reclaims/respawns per Hermes's respawn guard.
   (Higher-level "self-healing" — e.g. regenerating artifacts lost to a scratch
   dir — is orchestrator-skill behavior you write, not core Hermes.)
-- Missing tool / ambiguous state → the worker should block the card with a reason,
-  not guess.
+- Missing tool / ambiguous state / non-zero adapter exit → the worker blocks the
+  card with the adapter's JSON error as the reason. It never guesses, retries
+  with hand-rolled SQL, or writes a one-off script — an adapter gap is a repo
+  bug to fix (with tests and the eval), not something to work around in a
+  session.
 - Be honest in completion metadata. Don't fake a green test.

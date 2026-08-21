@@ -81,6 +81,26 @@ class Rubric:
 class Stage:
     stage: str            # task title prefix, e.g. "prototype_build"
     role: str             # abstract role; mapped to a profile via `roles:`
+    # Optional per-stage model routing; overrides the role-level values.
+    model: str | None = None
+    provider: str | None = None
+    reasoning_effort: str | None = None
+
+
+@dataclass(frozen=True)
+class RoleDef:
+    """A role's concrete runtime binding: profile plus optional model routing.
+
+    `roles:` values in triage.yaml may be a bare profile name (string) or a
+    mapping `{profile, model, provider, reasoning_effort}`. Model routing is
+    applied per created card via the board's `model_override` /
+    `provider_override` / `reasoning_effort` columns — the profile itself is
+    never mutated, so pipelines already running keep their behavior.
+    """
+    profile: str
+    model: str | None = None
+    provider: str | None = None
+    reasoning_effort: str | None = None
 
 
 @dataclass
@@ -93,6 +113,7 @@ class PathDef:
     workspace_subdir: str = ""                            # persistent dir bucket, e.g. "builds"
     scope_rails: str | None = None                        # prompt-policy md injected into workers
     deliverable_spec: str | None = None                   # output-format md injected into workers
+    deliverable: str | None = None                        # primary deliverable file/glob inside the item workspace
     auto: bool = False                                    # True = terminal path (e.g. shelve), no work
 
 
@@ -164,7 +185,8 @@ class TriageConfig:
     research: ResearchLanes
     route: Route
     paths: dict[str, PathDef]
-    roles: dict[str, str]
+    roles: dict[str, str]              # role -> profile name (derived from role_defs)
+    role_defs: dict[str, RoleDef]      # role -> full binding incl. optional model routing
     gate: Gate
     hermes: HermesDeployment
     config_path: str
@@ -180,6 +202,14 @@ class TriageConfig:
                 f"Known roles: {sorted(self.roles)}."
             )
         return self.roles[role]
+
+    def role_def(self, role: str) -> RoleDef:
+        if role not in self.role_defs:
+            raise ConfigError(
+                f"Role {role!r} is used in a path/stage but is not defined in `roles:`. "
+                f"Known roles: {sorted(self.role_defs)}."
+            )
+        return self.role_defs[role]
 
     def get_path(self, name: str) -> PathDef:
         if name not in self.paths:
@@ -248,10 +278,35 @@ class TriageConfig:
                 workspace_subdir=pd.get("workspace_subdir", name),
                 scope_rails=pd.get("scope_rails"),
                 deliverable_spec=pd.get("deliverable_spec"),
+                deliverable=pd.get("deliverable"),
                 auto=bool(pd.get("auto", False)),
             )
 
-        roles = dict(req("roles"))
+        role_defs: dict[str, RoleDef] = {}
+        for role_name, role_value in req("roles").items():
+            if isinstance(role_value, str):
+                role_defs[str(role_name)] = RoleDef(profile=role_value)
+            elif isinstance(role_value, dict):
+                unknown = set(role_value) - {"profile", "model", "provider", "reasoning_effort"}
+                if unknown:
+                    raise ConfigError(
+                        f"roles.{role_name} has unknown key(s) {sorted(unknown)}; "
+                        "allowed: profile, model, provider, reasoning_effort."
+                    )
+                profile = str(role_value.get("profile") or "").strip()
+                if not profile:
+                    raise ConfigError(f"roles.{role_name} mapping form requires a non-empty `profile`.")
+                role_defs[str(role_name)] = RoleDef(
+                    profile=profile,
+                    model=(str(role_value["model"]).strip() or None) if role_value.get("model") else None,
+                    provider=(str(role_value["provider"]).strip() or None) if role_value.get("provider") else None,
+                    reasoning_effort=(str(role_value["reasoning_effort"]).strip() or None) if role_value.get("reasoning_effort") else None,
+                )
+            else:
+                raise ConfigError(
+                    f"roles.{role_name} must be a profile name or a mapping with `profile:`; got {type(role_value).__name__}."
+                )
+        roles = {name: role_def.profile for name, role_def in role_defs.items()}
         sources = [Source(**s) for s in data.get("sources", [])]
         warnings: list[str] = []
         hermes_d = data.get("hermes")
@@ -339,6 +394,7 @@ class TriageConfig:
             route=route,
             paths=paths,
             roles=roles,
+            role_defs=role_defs,
             gate=Gate(**(data.get("gate") or {})),
             hermes=hermes,
             config_path=(

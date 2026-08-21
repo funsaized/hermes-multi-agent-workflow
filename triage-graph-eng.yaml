@@ -217,6 +217,7 @@ paths:
     workspace_subdir: tutorials
     scope_rails: pipelines/graph-eng/rails.md
     deliverable_spec: pipelines/graph-eng/specs/tutorial.md
+    deliverable: tutorial.md
 
   worked_example:
     prep:
@@ -230,6 +231,7 @@ paths:
     workspace_subdir: worked-examples
     scope_rails: pipelines/graph-eng/rails.md
     deliverable_spec: pipelines/graph-eng/specs/worked-example.md
+    deliverable: README.md
 
   hands_on_lab:
     prep:
@@ -244,6 +246,7 @@ paths:
     workspace_subdir: hands-on-labs
     scope_rails: pipelines/graph-eng/rails.md
     deliverable_spec: pipelines/graph-eng/specs/hands-on-lab.md
+    deliverable: README.md
 
   enterprise_reference:
     prep:
@@ -257,10 +260,15 @@ paths:
     workspace_subdir: enterprise-references
     scope_rails: pipelines/graph-eng/rails.md
     deliverable_spec: pipelines/graph-eng/specs/enterprise-reference.md
+    deliverable: README.md
 
   shelve:
     auto: true
 
+# A role may bind per-card model routing without touching profiles (applied via
+# the board's model_override/provider_override/reasoning_effort columns):
+#   researcher: { profile: researcher, model: <cheap-model-id>, reasoning_effort: low }
+# Stage entries accept the same keys and win over role-level values.
 roles:
   orchestrator: default
   researcher: researcher

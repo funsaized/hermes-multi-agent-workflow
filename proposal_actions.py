@@ -34,7 +34,7 @@ from typing import Any
 from engine.config import TriageConfig
 from engine.engine import TriageEngine
 from engine.item_vault import ItemVault, utc_now_iso
-from engine.kanban_store import KanbanStore
+from engine.kanban_store import KanbanStore, resolve_board_db
 
 EXPECTED_STATUS = "awaiting_approval"
 
@@ -71,15 +71,11 @@ def board_db(config: TriageConfig) -> Path:
     """Resolve the board DB the same way Hermes does.
 
     The dispatcher injects HERMES_KANBAN_DB into each worker's env; that wins.
-    Otherwise: the back-compat `default` board is ~/.hermes/kanban.db; a named
-    board lives at ~/.hermes/kanban/boards/<slug>/kanban.db.
+    Otherwise resolution honors HERMES_HOME and probes the platform Hermes
+    homes (`~/.hermes`, `%LOCALAPPDATA%/hermes`) for the configured board —
+    see `engine.kanban_store.resolve_board_db`. Never hardcode a board path.
     """
-    env = os.environ.get("HERMES_KANBAN_DB")
-    if env:
-        return Path(env).resolve()
-    if config.board == "default":
-        return Path.home() / ".hermes" / "kanban.db"
-    return Path.home() / ".hermes" / "kanban" / "boards" / config.board / "kanban.db"
+    return resolve_board_db(config.board)
 
 
 def first_linked_task(fm: dict[str, Any]) -> str | None:
@@ -139,14 +135,10 @@ def action_approve(reference: str, config_path: str | Path | None = None) -> dic
         for spec in specs:
             task_id = store.create_task(
                 conn,
-                title=spec.title,
-                body=spec.body,
-                assignee=spec.assignee(config),
                 parents=[prev_id] if prev_id else None,
                 created_by="hermes-triage:human-action",
-                workspace_kind=spec.workspace_kind,
-                workspace_path=spec.workspace_path,
                 idempotency_key=f"{config.pipeline_id}:fulfill:{slug}:{spec.title}",
+                **spec.store_kwargs(config),
             )
             created.append({"task_id": task_id, "title": spec.title, "assignee": spec.assignee(config)})
             prev_id = task_id

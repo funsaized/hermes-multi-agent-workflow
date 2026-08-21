@@ -37,15 +37,44 @@ this proposal task after the send succeeds.
 """
 
 
-def apply_prep(slug: str, route_task_id: str, config_path: str | None = None) -> dict:
+def apply_prep(
+    slug: str,
+    route_task_id: str,
+    config_path: str | None = None,
+    classification: str | None = None,
+) -> dict:
     config = TriageConfig.load(config_path or os.environ.get("TRIAGE_CONFIG") or "triage.yaml")
     vault = ItemVault(vault_dir(config))
+    engine = TriageEngine(config, vault)
     item = vault.load(slug)
-    path_name = item.frontmatter.get("path")
+
+    if classification is not None:
+        # Deterministic route resolution: the caller only READ the classifier
+        # value; the map lives in triage.yaml and raises on unknown values.
+        path_name = engine.route(classification)
+        item.frontmatter["path"] = path_name
+        item.frontmatter["classified_as"] = classification
+        vault.save(item)
+    else:
+        path_name = item.frontmatter.get("path")
     if path_name not in config.paths:
         raise ValueError(f"Item {slug} has invalid path {path_name!r}.")
 
-    specs = TriageEngine(config, vault).prep_specs(slug, path_name)
+    if config.get_path(path_name).auto:
+        # Terminal path (e.g. shelve): close out without prep or proposal.
+        item.frontmatter["status"] = f"auto_{path_name}"
+        vault.save(item)
+        return {
+            "ok": True,
+            "pipeline_id": config.pipeline_id,
+            "slug": slug,
+            "path": path_name,
+            "auto": True,
+            "chain": [],
+            "proposal_task_id": None,
+        }
+
+    specs = engine.prep_specs(slug, path_name)
     store = KanbanStore(board_db(config))
     conn = store.connect()
     created = []
@@ -54,28 +83,28 @@ def apply_prep(slug: str, route_task_id: str, config_path: str | None = None) ->
         for spec in specs:
             task_id = store.create_task(
                 conn,
-                title=spec.title,
-                body=spec.body,
-                assignee=spec.assignee(config),
                 parents=[parent],
                 created_by="hermes-triage:pre-gate",
-                workspace_kind=spec.workspace_kind,
-                workspace_path=spec.workspace_path,
                 idempotency_key=f"{config.pipeline_id}:prep:{route_task_id}:{slug}:{spec.title}",
+                **spec.store_kwargs(config),
             )
             created.append({"task_id": task_id, "title": spec.title, "assignee": spec.assignee(config)})
             parent = task_id
         path = config.get_path(path_name)
+        propose_def = config.role_def(path.propose_role)
         proposal_id = store.create_task(
             conn,
             title=f"propose: {slug}",
             body=proposal_body(config, slug, path_name),
-            assignee=config.role_to_profile(path.propose_role),
+            assignee=propose_def.profile,
             parents=[parent],
             created_by="hermes-triage:pre-gate",
             workspace_kind="dir",
             workspace_path=str(Path(config.hermes.project_root).resolve()),
             idempotency_key=f"{config.pipeline_id}:propose:{route_task_id}:{slug}",
+            model_override=propose_def.model,
+            provider_override=propose_def.provider,
+            reasoning_effort=propose_def.reasoning_effort,
         )
         proposal = {"task_id": proposal_id, "title": f"propose: {slug}", "assignee": config.role_to_profile(path.propose_role)}
         conn.commit()
@@ -102,10 +131,16 @@ def main() -> int:
     parser.add_argument("--config", default=os.environ.get("TRIAGE_CONFIG") or "triage.yaml")
     parser.add_argument("slug")
     parser.add_argument("--route-task", default=os.environ.get("HERMES_KANBAN_TASK"))
+    parser.add_argument(
+        "--classification",
+        default=None,
+        help="Classifier value read from the classifier lane's result; resolves and "
+        "records the path deterministically via route.map (handles auto paths).",
+    )
     args = parser.parse_args()
     if not args.route_task:
         parser.error("--route-task is required outside a dispatched Kanban worker")
-    print(json.dumps(apply_prep(args.slug, args.route_task, args.config), indent=2))
+    print(json.dumps(apply_prep(args.slug, args.route_task, args.config, args.classification), indent=2))
     return 0
 
 

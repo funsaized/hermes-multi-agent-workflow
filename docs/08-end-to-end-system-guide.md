@@ -343,7 +343,15 @@ Persistent `dir` workspaces are load-bearing. Hermes deletes undeclared scratch
 files after task completion. A shared directory preserves artifacts across
 roles.
 
-Evidence: `engine/engine.py:139-179`, `proposal_actions.py:108-151`.
+The FINAL fulfillment stage's task body carries an engine-generated instruction
+to run `delivery_actions.py`, which resolves the path's configured
+`deliverable:` file inside that workspace, sends it via
+`hermes send --to <gate.target>`, marks the item `delivered`, and comments on
+the triage root — or exits non-zero so the worker blocks. Delivery is no longer
+a prose instruction.
+
+Evidence: `engine/engine.py` (`_chain` delivery note), `delivery_actions.py`,
+`proposal_actions.py`, `tests/test_delivery_actions.py`.
 
 Note that the example “video” path creates slides and a script; it does not render
 or publish an actual video (`paths/specs/video.md:8-13`).
@@ -482,27 +490,19 @@ Evidence: `docs/06-security.md:8-64`, `.gitignore:1-14`.
 These are the differences between the intended architecture and what is actually
 wired today.
 
-### P0 — Dispatched tasks do not receive the repository or item paths
+### MOSTLY RESOLVED (was P0) — Dispatched tasks now receive the repository workspace
 
-The scout creates the intake card with the default scratch workspace. The
-orchestrator skill then says all commands run from the repo root, but no task
-pins that repo as `dir:<absolute-path>`. Research/prep task bodies say “read the
-item file” without including its absolute path. Fulfillment workers share the
-output directory, but the vault is elsewhere and again not named absolutely.
+`scout_actions.py` creates the intake card with `--workspace dir:<project_root>`;
+the engine's triage-root, lane, classifier, and route specs all pin
+`dir:<project_root>`; fulfillment stages pin the shared persistent item
+directory and their bodies name it absolutely. Adapter commands embed the exact
+config path. Remaining nuance: research/prep bodies still say "read the item
+file" relative to the pinned project workspace rather than embedding the vault
+file's absolute path — acceptable while every card pins the project dir, but
+keep that invariant.
 
-Consequences:
-
-- an orchestrator worker may not find `triage.yaml`, `engine/`, or the scout report;
-- researchers may not find the item file;
-- fulfillment workers may not find the approved proposal/evidence.
-
-Smallest fix shape: give the board a project/default workdir or put explicit
-absolute repo/vault/item paths into every task specification; choose one
-workspace contract and test it end to end.
-
-Evidence: `skills/templates/triage-scout/SKILL.md:52-64`,
-`skills/templates/triage-orchestrator/SKILL.md:23-24`,
-`engine/engine.py:114-121`, `engine/engine.py:165-177`.
+Evidence: `scout_actions.py`, `engine/engine.py` (spec factories),
+`intake_actions.py`, `scripts/run_synthetic_eval.py`.
 
 ### P0 — (partially resolved) The setup plan contained stale current-Hermes commands
 
@@ -583,34 +583,33 @@ Evidence: `engine/scaffold.py`, `engine/hermes_preflight.py`,
 `docs/07-runbook.md`, `handoffs/impl-a.md`, `handoffs/impl-b.md`,
 `handoffs/impl-c.md`.
 
-### P0 — The full pre-gate DAG is only partly constructed by code
+### RESOLVED (was P0) — The full pre-gate DAG is now constructed by code
 
-`research_specs()` returns evidence cards and `classifier_spec()` returns their
-fan-in; the route card is still manually created by the orchestrator skill.
-`pre_gate_actions.py` applies the ordered `prep_specs()` as a linked chain,
-resolving configured roles to profiles, preserving each exact workspace, and
-appending a dependency-gated proposal card. Route-card creation and root
-completion remain model-applied transitions.
+`intake_actions.py apply` builds the entire pre-gate graph deterministically
+from engine specs: `triage_root_spec()` (parented to the intake card),
+`research_specs()`, `classifier_spec()`, and `route_spec()` (skill-pinned,
+parented to the classifier), with intake-scoped idempotency keys that
+interoperate with `hermes kanban`-created cards. The route worker resolves the
+path through `pre_gate_actions.py --classification`, which also records it on
+the item and closes out auto paths. The one model-applied board transition left
+is a worker completing its own task (a Hermes protocol constraint). The
+synthetic eval (`scripts/run_synthetic_eval.py`) regression-tests the whole
+shape.
 
-The adapter removes model improvisation from prep-chain mechanics, but the earlier
-root and route transitions still rely on the model.
+Evidence: `intake_actions.py`, `engine/engine.py`, `pre_gate_actions.py`,
+`tests/test_intake_actions.py`, `scripts/run_synthetic_eval.py`.
 
-Evidence: `engine/engine.py:97-123`, `engine/engine.py:132-179`,
-`pre_gate_actions.py`, `skills/templates/triage-orchestrator/SKILL.md`.
+### RESOLVED (was P0) — Root-task completion semantics are now explicit
 
-### P0 — Root-task completion semantics are ambiguous
+The triage root's body (generated by `triage_root_spec()`) defines the
+lifecycle: its worker runs `intake_actions.py verify --slug <slug>` (read-only
+graph check), creates nothing, and completes itself to release the lanes
+together — or blocks with the verify JSON when the graph is incomplete. The
+root is a pure release barrier; the item's lifecycle anchor is the vault file,
+not a board card.
 
-Research lanes are parented to the triage task, so they remain `todo` until that
-root is `done`. The skill says to create the root and lanes but does not define
-when/how the root is completed. Elsewhere it describes the triage task as
-still open at the gate. Those two interpretations conflict.
-
-Smallest reliable shape: do not use one card as both a completed fan-out trigger
-and an intentionally open lifecycle anchor. Use a completed `research_seed` card
-for lane parents and a separate item/gate anchor, or create the lanes ready and
-track the item root without making it a dependency.
-
-Evidence: `engine/engine.py:97-123`, `docs/02-the-board.md:30-50`.
+Evidence: `engine/engine.py` (`triage_root_spec`), `intake_actions.py`
+(`action_verify`).
 
 ### P0 — The human reply path is prose, not an explicit integration
 
@@ -633,21 +632,27 @@ A compatibility probe against the installed Hermes 0.20.0 schema succeeded for
 basic card insertion (`ready` with no parents; `todo` with an open parent). That
 proves narrow schema compatibility today, not API compatibility.
 
-Direct writes bypass current Hermes behavior such as:
+Mitigations now in place: the store probes `PRAGMA table_info(tasks)` per
+connection and only writes optional columns (`idempotency_key`, `skills`,
+`model_override`, `provider_override`, `reasoning_effort`) when present, and
+its idempotency lookup goes through the `idempotency_key` column first so it
+interoperates with `hermes kanban ... --idempotency-key`-created cards instead
+of duplicating them.
+
+Direct writes still bypass current Hermes behavior such as:
 
 - parent/task validation and cycle checks;
-- idempotency keys;
 - notification subscription inheritance;
 - current run records and structured handoffs;
 - canonical completion/promotion and attachment preservation;
-- model/skill/runtime/retry limits;
+- runtime/retry limits;
 - migrations and future schema changes.
 
-Smallest fix shape: make the deterministic engine emit pure specs, then apply
-them through documented `hermes kanban ... --json` calls or a supported Kanban
-adapter. Do not maintain a parallel subset of Hermes’ lifecycle code.
+Smallest further fix shape: apply engine specs through documented
+`hermes kanban ... --json` calls or a supported Kanban adapter once one exists.
+Do not maintain a parallel subset of Hermes’ lifecycle code.
 
-Evidence: `engine/kanban_store.py:1-94` and the official Kanban documentation.
+Evidence: `engine/kanban_store.py` and the official Kanban documentation.
 
 ### P1 — Several advertised mechanisms are placeholders
 

@@ -43,7 +43,9 @@ Use `.env.example` (committed, no values) to document required variables.
 
 ## What's safe to publish
 
-- The `engine/` package, `proposal_actions.py`, `cli/`, `scripts/`, `tests/`.
+- The `engine/` package, the adapters (`intake_actions.py`, `pre_gate_actions.py`,
+  `proposal_actions.py`, `delivery_actions.py`, `scout_actions.py`), `cli/`,
+  `scripts/`, `tests/`.
 - `triage.yaml` (config, no secrets) and the `paths/` + `skills/templates/`
   markdown — **review them first** for anything domain-confidential (internal
   URLs, customer names, private endpoints in your `query` strings).

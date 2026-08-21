@@ -39,16 +39,24 @@ that belongs in config.
 | `engine/routing.py` — applies the route map | `paths/proposals/*.md` — gate messages |
 | `engine/dedup.py` — similarity | `skills/templates/*/SKILL.md` — scout + orchestrator behavior |
 | `engine/item_vault.py`, `kanban_store.py`, `frontmatter.py`, `intake_parser.py` | env: profiles, models, board name, schedules |
+| `intake_actions.py` — intake adapter (plan/apply/verify) | per-role/per-stage `model:` routing in `roles:`/stages |
+| `pre_gate_actions.py` — route + prep + proposal | each path's `deliverable:` file |
 | `proposal_actions.py` — gate handler (config-driven) | |
+| `delivery_actions.py` — delivery hook (`hermes send`) | |
 
 ## Architecture in one paragraph
 
 **Fat engine, thin skill.** Deterministic calculations and task-spec generation
-(dedup, scoring math, route resolution, lane/stage specs, workspace selection)
-live in `engine/engine.py::TriageEngine`. Deterministic adapters apply and link
-prep/proposal and fulfillment specs. Pre-gate route-card creation and root completion still
-live in orchestrator prose; do not describe those transitions as engine-enforced.
-Read `docs/01-architecture.md`.
+(dedup, scoring math, route resolution, lane/stage specs, workspace selection,
+model routing) live in `engine/engine.py::TriageEngine`. Four deterministic
+adapters apply every board mutation: `intake_actions.py` (items + the complete
+pre-gate graph), `pre_gate_actions.py` (route → prep → proposal, incl. auto
+paths), `proposal_actions.py` (post-gate chain on approve), and
+`delivery_actions.py` (final send). The model contributes exactly three
+judgments: rubric scores, reading the classifier value, and proposal prose. If
+a pipeline step seems to need ad-hoc code in a worker session, that is an
+adapter gap — fix it in the repo with tests and the synthetic eval, never with
+a one-off script. Read `docs/01-architecture.md`.
 
 ## How to help the human adapt it (the standard flow)
 
@@ -62,7 +70,9 @@ Follow `docs/04-adapting-to-your-domain.md`. In short:
 3. **Rewrite the markdown templates** under `paths/` (rails, specs, proposals),
    each `sources[].query`, and any shared behavior in `skills/templates/`.
 4. **Validate:** `python -m cli.triage validate` until it's clean.
-5. **Keep tests green:** `python -m unittest discover -s tests`. Add domain cases.
+5. **Keep tests green:** `python -m unittest discover -s tests` (includes the
+   synthetic end-to-end eval; `python scripts/run_synthetic_eval.py` runs it
+   standalone). Add domain cases.
 6. **Scaffold:** `python -m cli.triage scaffold` prints the Hermes setup plan
    (board, profiles, toolsets, cron, gateways, and skill-install checkpoints).
    `python -m cli.triage render-skills` separately writes staged skill files.
@@ -81,9 +91,16 @@ These cost real debugging in the system this was extracted from. Preserve them:
 - **Post-gate stages must use a persistent `dir` workspace, not scratch.** Scratch
   dirs are wiped between tasks, stranding the final delivery step. `engine.py`
   already does this for `fulfill` chains — don't change it to scratch.
-- **Setting status ≠ delivering.** The orchestrator is a headless worker; it must
-  actually run `hermes send --to <gate.target>` to reach the human. Status fields
-  don't notify anyone.
+- **Setting status ≠ delivering.** Status fields don't notify anyone. The
+  proposal worker must actually run `hermes send`; final delivery is enforced by
+  `delivery_actions.py`, which the engine wires into the last fulfillment
+  stage's task body — keep both.
+- **Never hardcode a board DB path.** `engine.kanban_store.resolve_board_db`
+  honors `HERMES_KANBAN_DB` / `HERMES_HOME` and probes `~/.hermes` and
+  `%LOCALAPPDATA%/hermes` (Windows). Hardcoded per-machine paths in scripts or
+  task bodies are how worker sessions historically went off the rails.
+- **One slugify.** `engine.item_vault.slugify` is the only slug derivation;
+  divergent slugs orphan items and duplicate board graphs.
 - **Gate replies are ordinary text.** Use `approve <slug>`, not `/approve`;
   Hermes reserves `/approve` for command-execution approval.
 - **First task in a post-gate chain must be `ready` (no blocking parent).** A

@@ -2,8 +2,9 @@
 
 Produce a local learner package with:
 
-- a README stating prerequisites, timebox, target capability, safety boundary,
-  and success criteria;
+- a `README.md` (the primary file the delivery hook sends) stating
+  prerequisites, timebox, target capability, safety boundary, and success
+  criteria;
 - a synthetic repository and incomplete context graph;
 - sequenced tasks that require the learner to model, ingest, query, ground a
   Copilot workflow, verify a change, and repair stale or misleading context;

@@ -13,12 +13,15 @@ context graphs for agentic enterprise delivery with GitHub Copilot and produces
 tutorials, worked examples, labs, or reference packages. The engine remains
 generic; each pipeline's subject matter stays in configuration and Markdown.
 
-> **This is a template, not a turnkey app.** It runs its unit tests and validates
-> its config out of the box, but going live requires setting up your Hermes
-> install, profiles, auth, and scouts (see `docs/07-runbook.md`). The point is to
-> give you — and your coding agent — a clear, working structure to adapt.
-> The post-gate handler is concrete; pre-gate board application and inbound reply
-> correlation still rely on the orchestrator skill and are not end-to-end wired.
+> **This is a template, not a turnkey app.** It runs its unit tests, its
+> synthetic end-to-end eval, and config validation out of the box, but going
+> live requires setting up your Hermes install, profiles, auth, and scouts (see
+> `docs/07-runbook.md`). The point is to give you — and your coding agent — a
+> clear, working structure to adapt. The deterministic spine is end-to-end:
+> intake graph construction (`intake_actions.py`), routing/prep
+> (`pre_gate_actions.py`), the gate handler (`proposal_actions.py`), and final
+> delivery (`delivery_actions.py`) are all adapter-applied. Inbound gate-reply
+> correlation is the one remaining orchestrator-skill responsibility.
 
 ## The idea
 
@@ -52,7 +55,8 @@ uv venv --python 3.11
 source .venv/bin/activate
 uv pip install -r requirements.txt       # just PyYAML
 python -m cli.triage validate            # check the example config
-python -m unittest discover -s tests     # full suite (live Hermes checks are opt-in)
+python -m unittest discover -s tests     # full suite incl. the synthetic e2e eval
+python scripts/run_synthetic_eval.py     # standalone end-to-end pipeline replay
 python -m cli.triage scaffold            # dry-run Hermes setup plan
 python -m cli.triage scaffold --no-preflight  # offline/pure-plan rendering
 python -m cli.triage preflight           # read-only capability/resource check
@@ -81,11 +85,14 @@ The whole adaptation is editing `triage.yaml` + the markdown templates it points
 at. Hand your coding agent **`AGENTS.md`** and ask it to walk you through
 `docs/04-adapting-to-your-domain.md`. In brief:
 
-1. Edit `triage.yaml`: sources, rubric, research lanes, route map, paths, roles.
+1. Edit `triage.yaml`: sources, rubric, research lanes, route map, paths
+   (including each path's `deliverable:` file), and roles (optionally with
+   per-role/per-stage `model:` routing).
 2. Edit `paths/` templates (scope rails, deliverable specs, proposal formats).
 3. Edit `sources[].query` and the shared skill templates. `render-skills`
    generates one named scout skill per source.
-4. `python -m cli.triage validate`, keep `tests/` green.
+4. `python -m cli.triage validate`, keep `tests/` (which include the synthetic
+   end-to-end eval) green.
 5. Follow `docs/07-runbook.md` for the Hermes 0.20 setup flow (profile-local cron
    scheduler gateways without Discord, one configured messaging gateway/dispatcher,
    and reviewed local skill copies). `install` is still a stub.
@@ -97,7 +104,7 @@ triage.yaml              AI Engineering Skills Map pipeline
 triage-graph-eng.yaml    Graph engineering + GitHub Copilot pipeline
 AGENTS.md                Guide for the AI agent adapting this template
 engine/                  Generic engine (rarely edited)
-  config.py              Loads + validates triage.yaml (typed Hermes deployment metadata)
+  config.py              Loads + validates triage.yaml (roles/model routing, deployment metadata)
   scaffold.py            Pure ordered deployment planner + safe shell/JSON rendering
   hermes_preflight.py    Read-only capability + resource check (injectable runner)
   skill_materialization.py Deterministic profile-specific SKILL.md renderer
@@ -105,16 +112,18 @@ engine/                  Generic engine (rarely edited)
   scoring.py             Rubric scoring (LLM mode + deterministic mode)
   routing.py             Classification → path
   dedup.py               Similarity (token-cosine; embedding backend is TODO)
-  item_vault.py          One markdown file per tracked item
-  kanban_store.py        Writes the Hermes Kanban board
-  intake_parser.py       Parses scout reports
-  frontmatter.py         Stdlib YAML-frontmatter for item files
+  item_vault.py          One markdown file per tracked item + canonical slugify
+  kanban_store.py        Writes the Hermes Kanban board; resolves the Hermes home
+intake_actions.py        Deterministic intake adapter — plan / apply (pre-gate graph) / verify
+pre_gate_actions.py      Route resolution + prep chain + proposal card (incl. auto paths)
 proposal_actions.py      Human-gate handler (approve/shelve/modify) — config-driven
+delivery_actions.py      Deterministic delivery hook — locate deliverable, `hermes send`, record
 scout_actions.py         Config-scoped scout report + intake-card submission
 paths/                   Per-path templates you customize
   rails/   specs/   proposals/
 skills/templates/        Scout + orchestrator SKILL.md templates
 cli/triage.py            validate / scaffold / preflight / render-skills / install-stub
+scripts/run_synthetic_eval.py  Synthetic end-to-end pipeline replay (no model, no live Hermes)
 scripts/cost_report.py   Standalone per-item spend report (not automatically enforced)
 scripts/rehearse_scaffold.py  Opt-in disposable-Home rehearsal (env-flag gated)
 tests/                   Generic engine + planner + preflight + render + CLI-contract tests

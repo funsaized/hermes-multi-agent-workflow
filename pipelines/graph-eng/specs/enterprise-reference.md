@@ -1,6 +1,8 @@
 # Deliverable spec: enterprise reference package
 
-Produce a bounded reference architecture plus local demonstrator containing:
+Produce a bounded reference architecture plus local demonstrator, with a
+`README.md` entry document (the primary file the delivery hook sends),
+containing:
 
 - context, goals, non-goals, actors, trust boundaries, and threat model;
 - a typed graph schema spanning requirements, decisions, code, tests, ownership,
