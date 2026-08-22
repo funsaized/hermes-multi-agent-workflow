@@ -18,7 +18,7 @@ class TestGraphEngineeringDomain(unittest.TestCase):
         cls.cfg = TriageConfig.load(ROOT / "triage-graph-eng.yaml")
 
     def test_pipeline_is_isolated_and_reuses_specialists(self):
-        current = TriageConfig.load(ROOT / "triage.yaml")
+        current = TriageConfig.load(ROOT / "triage-ai-engineering.yaml")
         self.assertNotEqual(self.cfg.pipeline_id, current.pipeline_id)
         self.assertNotEqual(self.cfg.board, current.board)
         self.assertNotEqual(self.cfg.workspace_root, current.workspace_root)

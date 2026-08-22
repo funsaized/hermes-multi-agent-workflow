@@ -111,7 +111,7 @@ class FakeRunner:
         return CommandResult(2, "", "unsupported fake command")
 
 
-CONFIG = TriageConfig.load(ROOT / "triage.yaml")
+CONFIG = TriageConfig.load(ROOT / "triage-ai-engineering.yaml")
 EXPECTED_PROFILES = tuple(CONFIG.hermes.profiles)
 
 
@@ -260,7 +260,7 @@ class PreflightTests(unittest.TestCase):
         report = run_preflight(CONFIG, FakeRunner(deployed=False))
         stdout = io.StringIO()
         with patch("cli.triage.run_preflight", return_value=report), redirect_stdout(stdout):
-            code = main(["--config", str(ROOT / "triage.yaml"), "preflight", "--format", "json"])
+            code = main(["--config", str(ROOT / "triage-ai-engineering.yaml"), "preflight", "--format", "json"])
         self.assertEqual(code, 1)
         self.assertFalse(json.loads(stdout.getvalue())["ok"])
 
@@ -272,7 +272,7 @@ class PreflightTests(unittest.TestCase):
             redirect_stdout(stdout),
             redirect_stderr(stderr),
         ):
-            code = main(["--config", str(ROOT / "triage.yaml"), "scaffold", "--format", "json"])
+            code = main(["--config", str(ROOT / "triage-ai-engineering.yaml"), "scaffold", "--format", "json"])
         self.assertEqual(code, 0)
         self.assertIsInstance(json.loads(stdout.getvalue()), list)
         self.assertIn("preflight warning", stderr.getvalue().lower())
@@ -285,7 +285,7 @@ class PreflightTests(unittest.TestCase):
             redirect_stderr(stderr),
         ):
             code = main([
-                "--config", str(ROOT / "triage.yaml"),
+                "--config", str(ROOT / "triage-ai-engineering.yaml"),
                 "scaffold", "--format", "json", "--no-preflight",
             ])
         self.assertEqual(code, 0)

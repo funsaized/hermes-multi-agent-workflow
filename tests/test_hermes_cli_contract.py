@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import unittest
+from pathlib import Path
 
 from engine.config import TriageConfig
 from engine.scaffold import CommandStep, build_deployment_plan
@@ -36,7 +37,9 @@ def command_contracts(cfg: TriageConfig) -> dict[tuple[str, ...], set[str]]:
 
 class PlannerContractExtractionTests(unittest.TestCase):
     def test_extracts_every_generated_command_surface(self):
-        contracts = command_contracts(TriageConfig.load())
+        contracts = command_contracts(
+            TriageConfig.load(Path(__file__).resolve().parent.parent / "triage-ai-engineering.yaml")
+        )
         self.assertEqual(
             set(contracts),
             {

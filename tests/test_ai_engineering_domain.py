@@ -15,7 +15,7 @@ from engine.engine import TriageEngine  # noqa: E402
 class TestAIEngineeringDomain(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.cfg = TriageConfig.load(ROOT / "triage.yaml")
+        cls.cfg = TriageConfig.load(ROOT / "triage-ai-engineering.yaml")
 
     def test_all_learning_formats_route(self):
         expected = {
