@@ -146,6 +146,39 @@ class TestEngineSpecs(unittest.TestCase):
             self.assertIn("builds", s.workspace_path)          # uses configured subdir
             self.assertIn("my-slug", s.workspace_path)
 
+    def test_fulfillment_specs_state_deliverable_contract(self):
+        paths = {
+            "build": {
+                "prep": [{"stage": "synth", "role": "analyst"}],
+                "propose": {"role": "orchestrator"},
+                "fulfill": [
+                    {"stage": "do_build", "role": "builder"},
+                    {"stage": "review", "role": "builder"},
+                    {"stage": "final_delivery", "role": "orchestrator"},
+                ],
+                "workspace_subdir": "builds",
+                "deliverable": "README.md",
+            },
+            "shelve": {"auto": True},
+        }
+        engine = TriageEngine(make_config(paths=paths))
+        first, middle, last = engine.fulfillment_specs("my-slug", "build")
+        for spec in (first, middle, last):
+            self.assertIn("Deliverable contract", spec.body)
+            self.assertIn("`README.md`", spec.body)
+        # Only the artifact-producing first stage runs the deterministic layout check.
+        self.assertIn("DELIVERABLE LAYOUT CHECK", first.body)
+        self.assertIn("deliver my-slug --dry-run", first.body)
+        self.assertNotIn("DELIVERABLE LAYOUT CHECK", middle.body)
+        self.assertNotIn("DELIVERABLE LAYOUT CHECK", last.body)
+        self.assertIn("FINAL DELIVERY", last.body)
+
+    def test_fulfillment_specs_without_deliverable_stay_plain(self):
+        specs = TriageEngine(make_config()).fulfillment_specs("my-slug", "build")
+        for spec in specs:
+            self.assertNotIn("Deliverable contract", spec.body)
+            self.assertNotIn("DELIVERABLE LAYOUT CHECK", spec.body)
+
     def test_roles_resolve_to_profiles(self):
         cfg = make_config()
         engine = TriageEngine(cfg)

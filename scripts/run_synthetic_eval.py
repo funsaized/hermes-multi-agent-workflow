@@ -234,6 +234,11 @@ def run(report_path: Path | None = None) -> dict:
             final = task_rows(db_path, "SELECT body FROM tasks WHERE id = ?", chain[2]["task_id"])[0]
             expect(f"delivery_actions.py" in final["body"] and f"deliver {SLUG}" in final["body"],
                    "final stage lacks delivery instruction")
+            first_body = task_rows(db_path, "SELECT body FROM tasks WHERE id = ?", chain[0]["task_id"])[0]
+            expect(f"deliver {SLUG} --dry-run" in first_body["body"],
+                   "first fulfillment stage lacks the deliverable layout check")
+            expect("Deliverable contract" in first_body["body"],
+                   "fulfillment stages must state the deliverable contract")
 
         # ---- 7. delivery hook ---- #
         with s.check("delivery: blocks honestly when the deliverable is missing"):
@@ -242,6 +247,21 @@ def run(report_path: Path | None = None) -> dict:
                 expect(False, "missing deliverable did not raise")
             except FileNotFoundError:
                 pass
+        with s.check("delivery: dry-run rejects a deliverable nested in a wrapper dir"):
+            workspace = root / "work" / "builds" / SLUG
+            nested = workspace / "build"
+            nested.mkdir(parents=True, exist_ok=True)
+            (nested / "deliverable.md").write_text("# The deliverable\n", encoding="utf-8")
+            try:
+                delivery_actions.action_deliver(SLUG, config_path, dry_run=True)
+                expect(False, "nested deliverable did not raise")
+            except FileNotFoundError as exc:
+                expect("build" in str(exc), "error must list the workspace contents")
+            # The conforming fix: move the artifact to the root, not widen the contract.
+            (nested / "deliverable.md").rename(workspace / "deliverable.md")
+            nested.rmdir()
+            checked = delivery_actions.action_deliver(SLUG, config_path, dry_run=True)
+            expect(checked["ok"] and checked.get("dry_run"), f"dry-run failed at root: {checked}")
         with s.check("delivery: resolves, sends via hermes, records delivery"):
             workspace = root / "work" / "builds" / SLUG
             workspace.mkdir(parents=True, exist_ok=True)

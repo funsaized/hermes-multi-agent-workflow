@@ -272,8 +272,26 @@ class TriageEngine:
                 f"\nWorkspace: your cwd is the PERSISTENT dir `{ws_path}` (workspace_kind=dir). "
                 "Write ALL artifacts here — never a scratch/tmp dir; later stages read this exact path.\n"
             )
+            if path.deliverable:
+                ws_note += (
+                    f"Deliverable contract: the delivery adapter resolves `{path.deliverable}` against "
+                    "this workspace ROOT (a non-recursive glob). The deliverable and its companion files "
+                    "belong at exactly that path — never inside an extra wrapper directory such as "
+                    "`build/` or `output/`.\n"
+                )
         injected = self._injected_constraints(path)
         for i, stage in enumerate(stages):
+            layout_note = ""
+            if persistent and path.deliverable and i == 0 and i < len(stages) - 1:
+                layout_note = (
+                    f"\n--- DELIVERABLE LAYOUT CHECK (deterministic adapter) ---\n"
+                    f"This stage produces the deliverable. Before completing this task, verify the "
+                    f"workspace satisfies the delivery contract:\n\n"
+                    f"    python delivery_actions.py --config \"{self.config.config_path}\" deliver {slug} --dry-run\n\n"
+                    "It sends nothing and mutates nothing. If it exits non-zero, fix the workspace layout "
+                    "so the configured deliverable resolves — do NOT edit triage.yaml — or block this "
+                    "task with its JSON error.\n"
+                )
             delivery_note = ""
             if persistent and i == len(stages) - 1:
                 delivery_note = (
@@ -289,7 +307,7 @@ class TriageEngine:
             body = (
                 f"Stage `{stage.stage}` ({phase}) for item `{slug}` on the `{path_name}` path.\n"
                 f"Read the item file for the approved proposal, sources, score, and human notes.\n"
-                f"{ws_note}{delivery_note}{injected}"
+                f"{ws_note}{layout_note}{delivery_note}{injected}"
             )
             specs.append(TaskSpec(
                 title=f"{stage.stage}: {slug}",

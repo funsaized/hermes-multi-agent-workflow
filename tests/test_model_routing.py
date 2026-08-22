@@ -65,9 +65,14 @@ class EngineSpecTests(unittest.TestCase):
 
     def test_final_fulfill_stage_gets_delivery_instruction(self):
         specs = self.engine.fulfillment_specs("slug-a", "build")
+        self.assertIn("FINAL DELIVERY", specs[-1].body)
         self.assertIn("delivery_actions.py", specs[-1].body)
         self.assertIn("slug-a", specs[-1].body)
-        for spec in specs[:-1]:
+        # The first (artifact-producing) stage gets only the dry-run layout check;
+        # the real send instruction stays exclusive to the final stage.
+        self.assertIn("deliver slug-a --dry-run", specs[0].body)
+        self.assertNotIn("FINAL DELIVERY", specs[0].body)
+        for spec in specs[1:-1]:
             self.assertNotIn("delivery_actions.py", spec.body)
 
     def test_triage_root_and_route_specs(self):
