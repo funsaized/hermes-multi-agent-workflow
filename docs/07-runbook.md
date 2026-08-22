@@ -16,7 +16,7 @@ The split:
 
 | Surface                     | What it does                                            | Mutates Hermes? |
 |-----------------------------|---------------------------------------------------------|-----------------|
-| `validate`                  | Checks `triage.yaml` consistency.                       | No              |
+| `validate`                  | Checks the selected pipeline config's consistency.      | No              |
 | `preflight`                 | Confirms the installed Hermes runtime + configured resources are ready. Exits 1 on blockers. | No |
 | `scaffold`                  | Dry-run deployment plan (shell or JSON).                | No              |
 | `render-skills`             | Writes profile-specific `SKILL.md` files under `work/scaffold/profiles/...` and prints the exact live destination for each. | No |
@@ -44,7 +44,8 @@ You execute the scaffolded commands and the manual install yourself.
   `uv venv --python 3.11`, `source .venv/bin/activate`, and
   `uv pip install -r requirements.txt`. Do not install into Apple's system
   Python.
-- `python -m cli.triage validate` is clean.
+- `python -m cli.triage --config <pipeline>.yaml validate` is clean (or export
+  `TRIAGE_CONFIG` once and omit the flag; the commands below assume you did).
 - (Recommended) `python -m cli.triage preflight --format json` exits 0 with no
   capability blockers in your Hermes home. Resource blockers are expected
   before you apply the scaffold.
@@ -108,7 +109,7 @@ hermes kanban boards switch <board>
 ```
 
 The `--default-workdir` is what `kanban` will suggest as the worker workspace.
-Setting it to the repo root keeps workers close to `triage.yaml` and
+Setting it to the repo root keeps workers close to the pipeline configs and
 `engine/`. The gateway dispatcher watches the active board, so creation must be
 followed by `boards switch`. `--clone-from` does not apply here.
 
@@ -322,7 +323,7 @@ deliverable to the configured target. Before any live smoke test, run the
 offline replay of that exact shape:
 
 ```bash
-python scripts/run_synthetic_eval.py     # 12 scenarios; must be 12/12
+python scripts/run_synthetic_eval.py     # 15 scenarios; must be 15/15
 ```
 
 The remaining model-applied step to prove live is inbound gate-reply handling
@@ -383,6 +384,7 @@ their respective gateways being up.
 | Gate send blocked with a 429 error | The adapter already retried with backoff (15s/45s/120s). Wait a few minutes of channel silence, then re-run the same adapter command once — never retry `hermes send` in a loop, and never send long content as message text. |
 | `/approve` triggers the wrong approval flow | Hermes reserves it for command execution; reply with ordinary text `approve <slug>`. |
 | Final delivery can't find artifacts | A stage used scratch, not the persistent `dir` workspace. |
+| Final delivery blocks: "No deliverable matched" but the artifact exists | It was written into a wrapper subdirectory (e.g. `build/`); the adapter resolves `paths.<path>.deliverable` against the workspace root only. Move the artifacts to the root and re-run `deliver`; the first fulfillment stage's `deliver --dry-run` check catches this before review stages run. |
 | `gateway start` fails on WSL | Use `hermes -p <profile> gateway run` (foreground). |
 | `gateway install` is invasive on disposable rehearsal | Use `hermes -p <profile> gateway run --foreground` or run the rehearsal with `HERMES_RUN_DISPOSABLE_REHEARSAL=1 python -m unittest tests.integration.test_scaffold_disposable_home -v` (it sanitizes `HOME`/`HERMES_HOME`/`TMPDIR`, refuses mutation unless Hermes discovers an isolation sentinel, and cleans up automatically). |
 | Toolset name rejected by installed Hermes | Compare `triage.yaml` with `hermes -p default tools list --platform cli` and `--platform cron`. This adaptation targets Hermes 0.20.4 names, including `code_execution`; it does not configure a `kanban` toolset because cron uses the CLI and dispatched workers receive Kanban tools automatically. |

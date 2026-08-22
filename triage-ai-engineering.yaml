@@ -11,7 +11,8 @@
 #   observable current capability -> observable target capability
 # Example: "can build basic RAG" -> "can separate retrieval and generation errors".
 #
-# Validate after editing:  .venv/Scripts/python -m cli.triage validate
+# Validate after editing:
+#   .venv/Scripts/python -m cli.triage --config triage-ai-engineering.yaml validate
 # ===========================================================================
 
 name: ai-engineering-skills-map

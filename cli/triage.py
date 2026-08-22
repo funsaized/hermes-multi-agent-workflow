@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Triage engine CLI:  python -m cli.triage <command>
 
+Every command reads the pipeline config selected by `--config <file>` (default:
+the `TRIAGE_CONFIG` env var, then `triage.yaml`). This repo ships named configs
+(`triage-ai-engineering.yaml`, `triage-graph-eng.yaml`), so pass `--config`.
+
 Commands:
-  validate   Load triage.yaml and check it for consistency. FULLY IMPLEMENTED —
-             run this after every edit.
+  validate   Load the selected config and check it for consistency. FULLY
+             IMPLEMENTED — run this after every edit.
   scaffold   Render a structured, side-effect-free Hermes deployment plan as
              safely quoted shell or JSON. It never executes the commands.
   preflight  Run structured, read-only Hermes capability and deployment checks.
   render-skills
              Materialize profile-specific skills under work/scaffold without
              writing to live Hermes profiles.
-  init       Stub. Intended to copy triage.yaml + path templates into a fresh
-             project. For now, copy this repo and edit triage.yaml directly.
+  init       Stub. Intended to copy a pipeline config + path templates into a
+             fresh project. For now, copy this repo and edit the config directly.
   install    Stub. Intended to actually run the scaffold plan. Left manual on
              purpose — review the printed commands and run them yourself.
 
@@ -22,6 +26,7 @@ Wire them up to your environment as you adopt the template.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -37,7 +42,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     except ConfigError as exc:
         print(f"[FAIL] {exc}")
         return 1
-    print(f"[OK] triage.yaml valid - pipeline {cfg.name!r} ({cfg.pipeline_id})")
+    print(f"[OK] {args.config} valid - pipeline {cfg.name!r} ({cfg.pipeline_id})")
     print(f"  board: {cfg.board}   workspace_root: {cfg.workspace_root}   cost_gate: ${cfg.cost_gate_usd}")
     print(f"  sources: {[s.id for s in cfg.sources]}")
     print(f"  rubric: {len(cfg.rubric.dimensions)} dims, threshold {cfg.rubric.threshold}/{cfg.rubric.max_total}")
@@ -123,10 +128,11 @@ def cmd_stub(name: str):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cli.triage", description="Hermes Multi-Agent Workflow CLI.")
-    parser.add_argument("--config", default="triage.yaml")
+    # Same fallback the runtime adapters use, so one env var selects the pipeline.
+    parser.add_argument("--config", default=os.environ.get("TRIAGE_CONFIG") or "triage.yaml")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("validate", help="Validate triage.yaml.").set_defaults(func=cmd_validate)
-    scaffold = sub.add_parser("scaffold", help="Print the setup plan from triage.yaml.")
+    sub.add_parser("validate", help="Validate the selected pipeline config.").set_defaults(func=cmd_validate)
+    scaffold = sub.add_parser("scaffold", help="Print the setup plan from the selected pipeline config.")
     scaffold.add_argument("--format", choices=("shell", "json"), default="shell")
     scaffold.add_argument(
         "--no-preflight",

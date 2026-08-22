@@ -235,7 +235,10 @@ class TriageConfig:
     def load(cls, path: str | Path = "triage.yaml") -> "TriageConfig":
         p = Path(path)
         if not p.exists():
-            raise ConfigError(f"Config not found: {p}. Copy and edit the example triage.yaml.")
+            raise ConfigError(
+                f"Config not found: {p}. Pass the pipeline config explicitly "
+                "(--config <file> or the TRIAGE_CONFIG env var)."
+            )
         data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
         return cls.from_dict(data, config_path=p)
 

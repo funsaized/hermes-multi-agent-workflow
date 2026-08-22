@@ -7,8 +7,8 @@ A reusable skeleton for an intended **autonomous, multi-agent triage pipeline** 
 **one human approval gate**, then **fulfills and delivers** — all coordinated on a
 single Hermes Kanban board.
 
-It includes two domain configurations: `triage.yaml`, the Andrew Ng AI
-Engineering Skills Map example, and `triage-graph-eng.yaml`, which researches
+It includes two domain configurations: `triage-ai-engineering.yaml`, the Andrew
+Ng AI Engineering Skills Map example, and `triage-graph-eng.yaml`, which researches
 context graphs for agentic enterprise delivery with GitHub Copilot and produces
 tutorials, worked examples, labs, or reference packages. The engine remains
 generic; each pipeline's subject matter stays in configuration and Markdown.
@@ -40,7 +40,8 @@ sources → intake → dedup → score → research (parallel) → route
 ```
 
 The shape is fixed; **what flows through it is yours.** Everything domain-specific
-lives in one file, `triage.yaml`.
+lives in one config file per pipeline (here `triage-ai-engineering.yaml` and
+`triage-graph-eng.yaml`).
 
 ## Quickstart
 
@@ -54,6 +55,7 @@ your `PATH`, then run:
 uv venv --python 3.11
 source .venv/bin/activate
 uv pip install -r requirements.txt       # just PyYAML
+export TRIAGE_CONFIG=triage-ai-engineering.yaml   # or pass --config per command
 python -m cli.triage validate            # check the example config
 python -m unittest discover -s tests     # full suite incl. the synthetic e2e eval
 python scripts/run_synthetic_eval.py     # standalone end-to-end pipeline replay
@@ -68,7 +70,7 @@ The CLI exposes six surfaces; four are implemented and two are stubs:
 
 | Subcommand        | Mutates Hermes? | Purpose |
 |-------------------|-----------------|---------|
-| `validate`        | No              | Checks `triage.yaml` consistency. |
+| `validate`        | No              | Checks the selected config's consistency (`--config <file>`, or the `TRIAGE_CONFIG` env var). |
 | `preflight`       | No              | Confirms the installed Hermes version/flags exist and which configured resources are already present. Exits 1 on blockers. |
 | `scaffold`        | No (dry run)    | Renders the deployment plan (shell or JSON) without executing it. Runs read-only preflight by default; use `--no-preflight` for offline rendering. |
 | `render-skills`   | Writes local staging only | Renders `work/scaffold/profiles/<profile>/skills/<skill>/SKILL.md` and prints the exact live destination. The base profile uses `$HERMES_HOME/skills/...`; cloned profiles use `$HERMES_HOME/profiles/...`. |
@@ -81,17 +83,17 @@ is in `docs/07-runbook.md`.
 
 ## Adapt it to your domain
 
-The whole adaptation is editing `triage.yaml` + the markdown templates it points
-at. Hand your coding agent **`AGENTS.md`** and ask it to walk you through
+The whole adaptation is editing your pipeline config + the markdown templates it
+points at. Hand your coding agent **`AGENTS.md`** and ask it to walk you through
 `docs/04-adapting-to-your-domain.md`. In brief:
 
-1. Edit `triage.yaml`: sources, rubric, research lanes, route map, paths
+1. Edit your pipeline config: sources, rubric, research lanes, route map, paths
    (including each path's `deliverable:` file), and roles (optionally with
    per-role/per-stage `model:` routing).
 2. Edit `paths/` templates (scope rails, deliverable specs, proposal formats).
 3. Edit `sources[].query` and the shared skill templates. `render-skills`
    generates one named scout skill per source.
-4. `python -m cli.triage validate`, keep `tests/` (which include the synthetic
+4. `python -m cli.triage --config <pipeline>.yaml validate`, keep `tests/` (which include the synthetic
    end-to-end eval) green.
 5. Follow `docs/07-runbook.md` for the Hermes 0.20 setup flow (profile-local cron
    scheduler gateways without Discord, one configured messaging gateway/dispatcher,
@@ -100,11 +102,11 @@ at. Hand your coding agent **`AGENTS.md`** and ask it to walk you through
 ## Repository layout
 
 ```
-triage.yaml              AI Engineering Skills Map pipeline
+triage-ai-engineering.yaml  AI Engineering Skills Map pipeline
 triage-graph-eng.yaml    Graph engineering + GitHub Copilot pipeline
 AGENTS.md                Guide for the AI agent adapting this template
 engine/                  Generic engine (rarely edited)
-  config.py              Loads + validates triage.yaml (roles/model routing, deployment metadata)
+  config.py              Loads + validates the pipeline config (roles/model routing, deployment metadata)
   scaffold.py            Pure ordered deployment planner + safe shell/JSON rendering
   hermes_preflight.py    Read-only capability + resource check (injectable runner)
   skill_materialization.py Deterministic profile-specific SKILL.md renderer
@@ -136,7 +138,7 @@ examples/                Reference configs
 
 - `docs/01-architecture.md` — fat engine / thin skill; how the pieces fit.
 - `docs/02-the-board.md` — Kanban as the bus; dispatcher; fan-in.
-- `docs/03-config-reference.md` — every `triage.yaml` key.
+- `docs/03-config-reference.md` — every pipeline-config key.
 - `docs/04-adapting-to-your-domain.md` — the step-by-step adaptation guide.
 - `docs/05-pipeline-stages.md` — each stage, and the gotchas to preserve.
 - `docs/06-security.md` — trust surface, scope rails, safe publishing.
@@ -153,7 +155,7 @@ pre-publish secret-scan checklist before open-sourcing an adapted copy.
 ## Contributing
 
 See **`CONTRIBUTING.md`**. The golden rule: keep `engine/` domain-agnostic; new
-domains go in `triage.yaml`, not the code.
+domains go in a pipeline config, not the code.
 
 ## License
 

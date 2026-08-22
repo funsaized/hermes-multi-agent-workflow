@@ -24,7 +24,8 @@ your adapted version.
 
 The per-path rails file is the model-visible policy for a fulfillment path. Good
 rails enumerate *acceptable* targets and an explicit *never* list (see the
-shipped `paths/rails/build.md`). When a proposal doesn't fit, the rule is
+shipped rails under `paths/rails/`, e.g. `hands-on-lab.md`). When a proposal
+doesn't fit, the rule is
 **shelve or re-route — never widen the rails to fit.** Rails do not technically
 prevent a model or process from exceeding them; least-privilege tools and the
 human gate remain necessary.
@@ -46,17 +47,18 @@ Use `.env.example` (committed, no values) to document required variables.
 - The `engine/` package, the adapters (`intake_actions.py`, `pre_gate_actions.py`,
   `proposal_actions.py`, `delivery_actions.py`, `scout_actions.py`), `cli/`,
   `scripts/`, `tests/`.
-- `triage.yaml` (config, no secrets) and the `paths/` + `skills/templates/`
-  markdown — **review them first** for anything domain-confidential (internal
-  URLs, customer names, private endpoints in your `query` strings).
+- The pipeline configs (`triage-*.yaml`, no secrets) and the `paths/` +
+  `skills/templates/` markdown — **review them first** for anything
+  domain-confidential (internal URLs, customer names, private endpoints in your
+  `query` strings).
 - `docs/`, `README.md`, `AGENTS.md`, `LICENSE`.
 
 ## Pre-publish checklist
 
 1. `git status` / `git ls-files` — confirm no `.env`, `*.db`, `auth.json`, `work/`.
 2. Grep the tree for secrets: tokens, keys, internal hostnames, personal handles.
-3. Read every `query:` in `triage.yaml` and every `paths/`/`skills/` file for
-   confidential domain detail.
+3. Read every `query:` in each pipeline config and every `paths/`/`skills/`
+   file for confidential domain detail.
 4. Confirm the README states the trust surface (the bullets above).
 5. Confirm the scope rails are real, not the placeholder.
 6. Run a static secret-scanner if you have one.

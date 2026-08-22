@@ -7,8 +7,8 @@ valuable.
 ## Ground rules
 
 1. **Keep the engine domain-agnostic.** `engine/` must not contain any subject
-   matter. Domain logic belongs in `triage.yaml` and the `paths/` / `skills/`
-   templates. PRs that hardcode a domain into the engine will be asked to move it
+   matter. Domain logic belongs in the pipeline configs (`triage-*.yaml`) and
+   the `paths/` / `skills/` templates. PRs that hardcode a domain into the engine will be asked to move it
    to config. (See `AGENTS.md`.)
 2. **Add mechanisms, not topics.** Good engine PRs add new *capabilities* (an
    embedding dedup backend, a new scoring mode, a new step type) — not new
@@ -16,8 +16,8 @@ valuable.
 3. **Keep tests green.** `python -m unittest discover -s tests` must pass. Add
    tests for new mechanisms; cover them against a synthetic config like the
    existing ones.
-4. **Validate config changes.** `python -m cli.triage validate` after any change
-   to `triage.yaml` or the config schema.
+4. **Validate config changes.** `python -m cli.triage --config <pipeline>.yaml
+   validate` after any change to a pipeline config or the config schema.
 5. **Never commit secrets or real data.** See `SECURITY.md` and `docs/06`.
 
 ## Dev setup
@@ -25,7 +25,7 @@ valuable.
 ```bash
 pip install -r requirements.txt
 python -m unittest discover -s tests     # full suite
-python -m cli.triage validate
+python -m cli.triage --config triage-ai-engineering.yaml validate
 ```
 
 No build step; it's plain Python (3.10+) plus PyYAML.
@@ -49,11 +49,11 @@ dependencies.
 ## Hermes CLI compatibility updates
 
 The deployment planner targets the minimum Hermes version declared at
-`hermes.min_version` in `triage.yaml`. When adopting a new Hermes release:
+`hermes.min_version` in the pipeline config. When adopting a new Hermes release:
 
 1. Review the release's command help, then update generated argv and the minimum
    version together. Do not change a command merely to match cosmetic help text.
-2. Run `python -m cli.triage validate` and both scaffold formats. The planner's
+2. Run `validate` and both scaffold formats against each shipped config. The planner's
    pure unit tests remain the authority for exact ordering and argv.
 3. Run `HERMES_RUN_CLI_CONTRACT=1 python -m unittest tests.test_hermes_cli_contract -v` with Hermes
    installed. The live test checks every generated subcommand and long flag;

@@ -2,8 +2,9 @@
 
 This folder preserves historical reference material for the design the template
 was extracted from. It is not a second config or a current deployment contract.
-The only active config is repo-root `triage.yaml`; it may evolve away from this
-snapshot. For the origin-system write-up, see **`REFERENCE.md`**.
+The active configs are repo-root `triage-ai-engineering.yaml` and
+`triage-graph-eng.yaml`; they may evolve away from this snapshot. For the
+origin-system write-up, see **`REFERENCE.md`**.
 
 ## What it does
 
@@ -28,8 +29,8 @@ generated from `skills/templates/triage-scout/SKILL.md` by `render-skills`.
 
 ## Use it as a starting point
 
-Edit root `triage.yaml`, then follow `docs/04-adapting-to-your-domain.md` to
-repoint it. The structure (sources → rubric → research → route → paths → gate)
+Edit a root pipeline config (e.g. `triage-ai-engineering.yaml`), then follow
+`docs/04-adapting-to-your-domain.md` to repoint it. The structure (sources → rubric → research → route → paths → gate)
 stays the same; you swap the content.
 
 ## The pattern generalizes

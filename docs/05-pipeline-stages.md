@@ -141,6 +141,14 @@ chain via `TriageEngine.fulfillment_specs()`.
 - ⚠️ **Gotcha — first stage `ready`.** The first fulfillment card has no blocking
   parent so it lands `ready`; the rest chain off it. This deliberately avoids
   depending on the lifecycle of the pre-gate triage/root card.
+- ⚠️ **Gotcha — the deliverable belongs at the workspace ROOT.** The delivery
+  adapter resolves `paths.<path>.deliverable` against the workspace root with a
+  non-recursive glob. A live build stage once nested everything under `build/`
+  and blocked final delivery two review stages later. The engine now states the
+  contract on every fulfillment card and instructs the FIRST stage to run
+  `delivery_actions.py deliver <slug> --dry-run` before completing — keep both
+  injections; the fix for a mismatch is conforming the layout, never widening
+  the glob.
 
 ## Stage 12 — Delivery (`delivery_actions.py`)
 
@@ -150,8 +158,8 @@ pre-split no-subcommand form still works). The adapter
 
 1. requires the item to be `approved` (the gate is real — unapproved work is
    refused; a `delivered` item is an idempotent no-op),
-2. resolves the deliverable inside the persistent workspace —
-   `paths.<path>.deliverable` (filename or glob, exactly one match), falling
+2. resolves the deliverable against the persistent workspace root (non-recursive
+   glob) — `paths.<path>.deliverable` (filename or glob, exactly one match), falling
    back to a single `deliverable.*` file, otherwise failing with a listing of
    what IS in the workspace,
 3. sends it through the configured Hermes channel as ONE attachment message
@@ -176,7 +184,8 @@ expose cost columns; adjust the SQL there for your schema.
 
 `python scripts/run_synthetic_eval.py` replays every stage above — including
 the auto path, an unknown classification, idempotent re-runs, model routing,
-and both delivery failure modes — against a temp board using the live Hermes
+and the delivery failure modes (missing deliverable, wrapper-dir layout) —
+against a temp board using the live Hermes
 schema, with the model's judgments played by fixtures. It also runs inside
 `python -m unittest discover -s tests`. Any change to a stage's guarantees must
 keep it green.

@@ -82,11 +82,15 @@ reviewed, deterministic adapters rather than model-interpreted prose.
 6. The human replies; the orchestrator shells to `proposal_actions.py`, which
    reads `paths.<path>.fulfill` and spawns the **fulfillment** chain in a shared
    persistent workspace (`engine.fulfillment_specs`).
-7. The engine writes a deterministic delivery instruction into the FINAL
-   fulfillment stage's body: its worker runs `delivery_actions.py deliver`,
-   which locates the configured deliverable in the persistent workspace, sends
-   it to `<gate.target>` as a single attachment message, and records delivery
-   on the item — or fails loudly so the worker blocks instead of improvising.
+7. The engine writes the deliverable contract into every fulfillment stage's
+   body (the configured `deliverable:` pattern resolves against the workspace
+   ROOT, non-recursively) and instructs the FIRST stage to verify the layout
+   with `delivery_actions.py deliver --dry-run` before completing. The FINAL
+   stage's body carries the real delivery instruction: its worker runs
+   `delivery_actions.py deliver`, which locates the configured deliverable in
+   the persistent workspace, sends it to `<gate.target>` as a single attachment
+   message, and records delivery on the item — or fails loudly so the worker
+   blocks instead of improvising.
 
 ## Multiple pipelines, one authenticated fleet
 

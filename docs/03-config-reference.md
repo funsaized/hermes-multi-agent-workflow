@@ -1,7 +1,9 @@
-# 03 — Config reference (`triage.yaml`)
+# 03 — Config reference (the pipeline config)
 
-Every key in `triage.yaml`. The typed view is `engine/config.py`; the validator is
-`TriageConfig.validate()` (run via `python -m cli.triage validate`).
+Every key in a pipeline config (this repo ships `triage-ai-engineering.yaml` and
+`triage-graph-eng.yaml`; docs refer to the file generically as `triage.yaml`).
+The typed view is `engine/config.py`; the validator is `TriageConfig.validate()`
+(run via `python -m cli.triage --config <pipeline>.yaml validate`).
 
 ## Top level
 
@@ -112,11 +114,11 @@ A map of path name → definition. A path is one outcome of routing.
 | `prep[]` | Ordered stages BEFORE the gate. Each `{stage, role}` plus optional model keys (below). `pre_gate_actions.py` links them sequentially and appends the proposal card. |
 | `propose.role` | Who runs the dependency-gated card that drafts + sends the proposal (usually `orchestrator`). |
 | `propose.template` | Markdown proposal template under `paths/proposals/`. |
-| `fulfill[]` | Stages AFTER approval. Each `{stage, role}` plus optional model keys. Run in a shared persistent workspace; the engine appends the deterministic `delivery_actions.py` instruction to the FINAL stage's task body. |
+| `fulfill[]` | Stages AFTER approval. Each `{stage, role}` plus optional model keys. Run in a shared persistent workspace. When `deliverable` is set, the engine states the deliverable contract on every stage's task body, instructs the FIRST stage to verify the layout with `delivery_actions.py deliver --dry-run`, and appends the deterministic delivery instruction to the FINAL stage's task body. |
 | `workspace_subdir` | Bucket under `workspace_root` for this path's per-item dirs (e.g. `builds`). Defaults to the path name. |
 | `scope_rails` | Markdown prompt-policy file inlined into each worker task. It guides the model but is not a sandbox or technical enforcement boundary. |
 | `deliverable_spec` | Markdown file (under `paths/specs/`) inlined into workers — output format. |
-| `deliverable` | Filename or glob, resolved inside the item's persistent workspace, naming the PRIMARY file `delivery_actions.py` sends at final delivery. It must match exactly one file; without it the adapter falls back to a single `deliverable.*` / `DELIVERABLE.*` file and otherwise fails loudly. |
+| `deliverable` | Filename or glob, resolved against the item's persistent workspace ROOT (non-recursive glob), naming the PRIMARY file `delivery_actions.py` sends at final delivery. It must match exactly one file; without it the adapter falls back to a single `deliverable.*` / `DELIVERABLE.*` file and otherwise fails loudly. A nested pattern such as `course/README.md` is a deliberate contract, not an accident of build layout. |
 | `auto` | `true` → terminal path, no work (e.g. `shelve`). `pre_gate_actions.py` closes the item out (`status: auto_<path>`) without creating cards. |
 
 `stage` is the task-title prefix and the conventional name workers key off. `role`
@@ -219,7 +221,8 @@ injected `kanban_*` worker tools.
 
 `python scripts/run_synthetic_eval.py` replays a full pipeline cycle (intake →
 graph → barrier → route → gate → fulfillment → delivery, including the auto
-path, unknown-classification failure, idempotent re-runs, and model routing) on
+path, unknown-classification failure, idempotent re-runs, model routing, and
+the deliverable layout contract) on
 a temp board with the live Hermes schema — no model, network, or live install.
 It also runs as part of `python -m unittest discover -s tests`. Run it after
 any engine, adapter, or skill-template change.

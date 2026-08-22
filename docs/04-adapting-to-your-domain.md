@@ -1,10 +1,11 @@
 # 04 — Adapting to your domain
 
-This repository also includes `triage-graph-eng.yaml` as a second complete
-example. It demonstrates lighter isolation: a unique pipeline id, board,
-workspace root, and cron scout profile while reusing authenticated worker
-profiles. Pass `--config triage-graph-eng.yaml` before each CLI subcommand;
-omitting `--config` selects `triage.yaml`.
+This repository ships two complete examples: `triage-ai-engineering.yaml` and
+`triage-graph-eng.yaml`. The second demonstrates lighter isolation: a unique
+pipeline id, board, workspace root, and cron scout profile while reusing
+authenticated worker profiles. Pass `--config <pipeline>.yaml` before each CLI
+subcommand (or set `TRIAGE_CONFIG`); omitting both falls back to `triage.yaml`,
+which this repo does not ship.
 
 This is the main "what do I do with this code" guide. It's written so an AI agent
 can drive it with the human. Work top to bottom; validate after each step.
@@ -21,11 +22,12 @@ Answer these with the human before editing anything:
 5. **What does each path produce?** (the deliverable per outcome)
 6. **What's the one thing the human approves?** (the gate)
 
-These map 1:1 to `triage.yaml` blocks: sources, rubric, route, paths, gate.
+These map 1:1 to the pipeline config's blocks: sources, rubric, route, paths, gate.
 
-## Step 1 — Rewrite `triage.yaml`
+## Step 1 — Rewrite the pipeline config
 
-Edit in this order; run `python -m cli.triage validate` after each block.
+Edit in this order; run `python -m cli.triage --config <pipeline>.yaml validate`
+after each block.
 
 When sharing one Hermes installation, give each config a unique `pipeline_id`,
 board, and workspace root. Roles may reuse authenticated profiles or select
@@ -45,9 +47,10 @@ pipeline-specific profiles where different tools, models, or memory are needed.
 6. **`route.map`** — classification value → path name.
 7. **`paths`** — one per route outcome. Define `prep`, `fulfill`, templates,
    workspace bucket, `scope_rails` / `deliverable_spec`, and the `deliverable:`
-   file the delivery hook sends (a filename or glob inside the item workspace —
-   keep it in sync with the deliverable spec). Mark dead-end outcomes
-   `auto: true`.
+   file the delivery hook sends (a filename or glob resolved against the item
+   workspace ROOT — keep it in sync with the deliverable spec; the engine states
+   this contract on every fulfillment card and has the first stage verify it
+   with `deliver --dry-run`). Mark dead-end outcomes `auto: true`.
 8. **`roles`** — map every role you used to a real profile name (string form),
    or to `{profile, model, provider, reasoning_effort}` to route that role's
    cards to a specific model without touching profiles. Stage entries accept
@@ -95,7 +98,7 @@ set in `triage.yaml`.
 ## Step 5 — Validate + test
 
 ```bash
-python -m cli.triage validate            # config consistent?
+python -m cli.triage --config <pipeline>.yaml validate   # config consistent?
 python -m unittest discover -s tests     # engine + adapters + synthetic e2e eval
 python scripts/run_synthetic_eval.py     # the e2e replay standalone, with a report
 ```
@@ -114,6 +117,7 @@ commands below do not mutate live Hermes state; executing commands printed by
 `scaffold` and copying rendered skills are the mutating steps:
 
 ```bash
+# Pass --config <pipeline>.yaml to each command, or export TRIAGE_CONFIG once.
 python -m cli.triage validate            # config consistent?
 python -m cli.triage preflight           # runtime + resources ready? (exits 1 on blockers)
 python -m cli.triage scaffold            # dry-run plan; review before executing
@@ -139,4 +143,4 @@ Think of it as filling in blanks in one sentence:
 > **\<value\>**, do **\<path\>**, which produces **\<deliverable\>** — but only after
 > I approve."
 
-Every bolded blank is a `triage.yaml` value. Nothing there is code.
+Every bolded blank is a pipeline-config value. Nothing there is code.

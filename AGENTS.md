@@ -11,17 +11,18 @@ The **Hermes Multi-Agent Workflow**: a reusable skeleton for an autonomous, mult
 > **researches** in parallel → **routes** to one of several paths → stops at **one
 > human gate** → **fulfills** → **delivers**.
 
-It is a **template, not a finished product.** Out of the box it is wired as a
-worked example (finding pain points about AI agents, then building a fix or making
-an explainer video). The human who cloned this wants to repoint it at *their*
-domain. Your job is to help them do that.
+It is a **template, not a finished product.** Out of the box it ships two worked
+pipelines: `triage-ai-engineering.yaml` (AI Engineering Skills Map learning
+artifacts) and `triage-graph-eng.yaml` (context-graph research for agentic
+delivery). The human who cloned this wants to repoint it at *their* domain.
+Your job is to help them do that.
 
 ## The single most important rule
 
-**The domain lives in `triage.yaml`, not in the Python.** The `engine/` package
-is generic and should stay that way. When the human says "make this about X,"
-your default move is to **edit `triage.yaml`** and the markdown templates it
-points at — *not* to edit `engine/`.
+**The domain lives in the pipeline config (a `triage-*.yaml` file), not in the
+Python.** The `engine/` package is generic and should stay that way. When the
+human says "make this about X," your default move is to **edit the pipeline
+config** and the markdown templates it points at — *not* to edit `engine/`.
 
 You touch `engine/` only to add a new **mechanism** (a new kind of step, a new
 scoring mode, an embedding backend). You never edit it to encode a **topic**.
@@ -33,7 +34,7 @@ that belongs in config.
 
 | Generic engine (rarely edit) | The human's domain (edit freely) |
 |---|---|
-| `engine/config.py` — loads/validates triage.yaml | `triage.yaml` — the whole pipeline definition |
+| `engine/config.py` — loads/validates the config | `triage-*.yaml` — the whole pipeline definition |
 | `engine/engine.py` — deterministic step logic | `paths/rails/*.md` — what may be built |
 | `engine/scoring.py` — applies the rubric | `paths/specs/*.md` — output formats |
 | `engine/routing.py` — applies the route map | `paths/proposals/*.md` — gate messages |
@@ -65,11 +66,12 @@ Follow `docs/04-adapting-to-your-domain.md`. In short:
 1. **Interview the human** for: their domain, what their scouts should watch, the
    rubric that decides "worth doing," the route decision, and what each path
    should *produce*.
-2. **Rewrite `triage.yaml`** to match — sources, item_schema, rubric, research
-   lanes, route map, paths, roles.
+2. **Rewrite the pipeline config** to match — sources, item_schema, rubric,
+   research lanes, route map, paths, roles.
 3. **Rewrite the markdown templates** under `paths/` (rails, specs, proposals),
    each `sources[].query`, and any shared behavior in `skills/templates/`.
-4. **Validate:** `python -m cli.triage validate` until it's clean.
+4. **Validate:** `python -m cli.triage --config <pipeline>.yaml validate` until
+   it's clean (or set `TRIAGE_CONFIG` once).
 5. **Keep tests green:** `python -m unittest discover -s tests` (includes the
    synthetic end-to-end eval; `python scripts/run_synthetic_eval.py` runs it
    standalone). Add domain cases.
@@ -101,6 +103,13 @@ These cost real debugging in the system this was extracted from. Preserve them:
   adapter sends ONE message with the file as a `MEDIA:` attachment plus a short
   caption, with bounded 429 backoff. Workers never retry sends in a loop — an
   improvised retry burst trips the platform's *global* bucket.
+- **The deliverable belongs at the workspace root.** The delivery adapter
+  resolves `paths.<path>.deliverable` against the persistent workspace ROOT
+  with a non-recursive glob; a live build stage once nested everything under
+  `build/` and blocked delivery. The engine states this contract on every
+  fulfillment card and has the FIRST stage verify it with
+  `delivery_actions.py deliver <slug> --dry-run` — keep both injections, and
+  fix a mismatch by conforming the layout, never by widening the glob.
 - **Never hardcode a board DB path.** `engine.kanban_store.resolve_board_db`
   honors `HERMES_KANBAN_DB` / `HERMES_HOME` and probes `~/.hermes` and
   `%LOCALAPPDATA%/hermes` (Windows). Hardcoded per-machine paths in scripts or
